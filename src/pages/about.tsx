@@ -8,7 +8,7 @@ const About: React.FC = () => {
       <p className="mt-4">
         Magic Vault is your go-to app for managing your Magic the Gathering card collection.
         Whether you're building decks, tracking card values, or playtesting strategies,
-        Magic Vault has you covered!
+        Magic Vault has you covered! Love it!
       </p>
     </div>
   );
