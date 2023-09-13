@@ -15,7 +15,7 @@ const MyApp: AppType<{ session: Session | null }> = ({
     <SessionProvider session={session}>
       
     <div>
-      <nav className="bg-blue-500 p-4">
+      <nav className="bg-violet-900 p-4">
         <div className="container mx-auto">
           <div className="flex justify-between">
             <div className="text-white font-bold">Magic Vault</div>
