@@ -58,6 +58,7 @@ export default function CameraFeed() {
 
   return (
     <div>
+      <h4>Press spacebar to capture image</h4>
       <video id="video" ref={webcamRef} width="640" height="480" autoPlay />
       {capturedImage && (
         <Image src={capturedImage} width="640" height="480" alt="captured" />
