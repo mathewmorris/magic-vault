@@ -1,5 +1,4 @@
-import Reac from "react";
-import { Tesseract } from "tesseract.ts";
+import React from "react";
 
 const About: React.FC = () => {
   return (
@@ -7,7 +6,7 @@ const About: React.FC = () => {
       <h1 className="text-4xl">About Magic Vault</h1>
       <p className="mt-4">
         Magic Vault is your go-to app for managing your Magic the Gathering card collection.
-        Whether you're building decks, tracking card values, or playtesting strategies,
+        Whether you are building decks, tracking card values, or playtesting strategies,
         Magic Vault has you covered! Love it!
       </p>
     </div>
