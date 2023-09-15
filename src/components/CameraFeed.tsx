@@ -1,23 +1,67 @@
-import React, { useRef, useEffect } from "react";
+import Image from "next/image";
+import React, { useEffect, useRef, useCallback, useState } from "react";
 
-const CameraFeed = () => {
-  const videoRef = useRef(null);
+export default function CameraFeed() {
+  const webcamRef = useRef<HTMLVideoElement>(null);
+  const [capturedImage, setCapturedImage] = useState<string | null>(null);
+
+  const capture = useCallback(() => {
+    if (!webcamRef.current) {
+      console.error("webcamRef is not defined");
+      return;
+    };
+
+    const canvas = document.createElement("canvas");
+    canvas.width = webcamRef.current.videoWidth;
+    canvas.height = webcamRef.current.videoHeight;
+    const ctx = canvas.getContext("2d");
+
+    if (!ctx) {
+      console.error("ctx is not defined");
+      return;
+    }
+
+    ctx.drawImage(webcamRef.current, 0, 0);
+
+    const imageSrc =  canvas.toDataURL("image/webp", 0.92);
+
+    if (imageSrc) {
+      setCapturedImage(imageSrc);
+    }
+  }, [webcamRef]);
 
   useEffect(() => {
-    navigator.mediaDevices
-      .getUserMedia({ video: true })
+    const video = document.getElementById('video') as HTMLVideoElement | null;
+    navigator.mediaDevices.getUserMedia({ video: true })
       .then((stream) => {
-        let video = videoRef.current;
+        if (!video) return;
+
         video.srcObject = stream;
-        return new Promise((resolve) => (video.onloadedmetadata = resolve));
+        video.play()
+          .catch((err) => console.error(err));
       })
-      .then(() => {
-        // video dimensions are known at this point
-      });
+      .catch((err) => console.error(err));
   }, []);
 
-  return <video ref={videoRef} autoPlay />;
-};
+  const handleKeyDown = useCallback((e: KeyboardEvent) => {
+    if (e.code === "Space") {
+      capture();
+    }
+  }, [capture]);
 
-export default CameraFeed;
+  useEffect(() => {
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [handleKeyDown]);
 
+  return (
+    <div>
+      <video id="video" ref={webcamRef} width="640" height="480" autoPlay />
+      {capturedImage && (
+        <Image src={capturedImage} width="640" height="480" alt="captured" />
+      )}
+    </div>
+  )
+}
