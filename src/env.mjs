@@ -1,7 +1,7 @@
-import { createEnv } from "@t3-oss/env-nextjs";
 import { z } from "zod";
+import { withAxiom } from "next-axiom";
 
-export const env = createEnv({
+export const env = withAxiom({
   /**
    * Specify your server-side environment variables schema here. This way you can ensure the app
    * isn't built with invalid env vars.
