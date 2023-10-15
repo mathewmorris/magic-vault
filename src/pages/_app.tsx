@@ -14,7 +14,7 @@ const MyApp: AppType<{ session: Session | null }> = ({
   return (
     <SessionProvider session={session}>
       
-    <div>
+    <div className="dark:bg-slate-800 min-h-screen dark:text-slate-50">
       <nav className="bg-violet-800 p-4">
         <div className="container mx-auto">
           <div className="flex justify-between">

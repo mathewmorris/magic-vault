@@ -1,9 +1,26 @@
-import Image from "next/image";
 import React, { useEffect, useRef, useCallback, useState } from "react";
+import Image from "next/image";
+import Tesseract from 'tesseract.js';
+import processor from './processor';
 
+export const useCard = () => {
+  const [text, setText] = useState<string>();
+    const recognizeCard = useCallback((image: Tesseract.ImageLike) => {
+      Tesseract.recognize(
+          image,
+          'eng',
+          ).then((data) => {
+              setText(data.text);
+            });
+    }, []);
+    
+    return { recognizeCard, text };
+}
+  
 export default function CameraFeed() {
   const webcamRef = useRef<HTMLVideoElement>(null);
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
+  const { text, recognizeCard } = useCard();
 
   const capture = useCallback(() => {
     if (!webcamRef.current) {
@@ -27,8 +44,9 @@ export default function CameraFeed() {
 
     if (imageSrc) {
       setCapturedImage(imageSrc);
+      recognizeCard(imageSrc);
     }
-  }, [webcamRef]);
+  }, [webcamRef, recognizeCard]);
 
   useEffect(() => {
     const video = document.getElementById('video') as HTMLVideoElement | null;
@@ -38,28 +56,20 @@ export default function CameraFeed() {
 
         video.srcObject = stream;
         video.play()
+          .then(() => {
+            processor.doLoad();
+          })
           .catch((err) => console.error(err));
       })
       .catch((err) => console.error(err));
   }, []);
 
-  const handleKeyDown = useCallback((e: KeyboardEvent) => {
-    if (e.code === "Space") {
-      capture();
-    }
-  }, [capture]);
-
-  useEffect(() => {
-    window.addEventListener("keydown", handleKeyDown);
-    return () => {
-      window.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [handleKeyDown]);
-
   return (
     <div>
-      <h4>Press spacebar to capture image</h4>
-      <video id="video" ref={webcamRef} width="640" height="480" autoPlay />
+      <button type="button" className="bg-violet-800 hover:bg-violet-600 text-white font-bold py-2 px-4 rounded-full" onClick={capture}>Capture</button>
+      <canvas id="canvas" width="640" height="480"></canvas>
+      <video className="hidden" id="video" ref={webcamRef} width="640" height="480" autoPlay />
+      <p>{text}</p>
       {capturedImage && (
         <Image src={capturedImage} width="640" height="480" alt="captured" />
       )}

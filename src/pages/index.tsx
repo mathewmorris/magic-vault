@@ -1,15 +1,13 @@
 import React from "react";
 import CameraFeed from '~/components/CameraFeed';
+import ImageInput from '~/components/ImageInput';
 
 const App = () => {
   return (
-    <div className="container mx-auto p-4">
+    <div className="container mx-auto p-4 dark:bg-slate-800">
       <h1 className="text-4xl">Welcome to Magic Vault!</h1>
-      <div className="columns-3">
-        <div className="container p-2 border-4 rounded-lg border-indigo-500/100">
-          <CameraFeed />
-        </div>
-      </div>
+      <ImageInput />
+      <CameraFeed />
     </div>
   );
 };
