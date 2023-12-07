@@ -69,7 +69,7 @@ export default function CameraFeed() {
       <button type="button" className="bg-violet-800 hover:bg-violet-600 text-white font-bold py-2 px-4 rounded-full" onClick={capture}>Capture</button>
       <canvas id="canvas" width="640" height="480"></canvas>
       <video className="hidden" id="video" ref={webcamRef} width="640" height="480" autoPlay />
-      <p>{text}</p>
+      {text && <p>{text}</p>}
       {capturedImage && (
         <Image src={capturedImage} width="640" height="480" alt="captured" />
       )}

@@ -24,6 +24,7 @@ const processor = {
   
     computeFrame: function() {
       this.ctx1.drawImage(this.video, 0, 0, this.width, this.height);
+      this.ctx1.filter = "blur(5px) grayscale(100%)";
       return;
     }
   };
