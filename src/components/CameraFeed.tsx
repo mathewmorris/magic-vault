@@ -1,7 +1,6 @@
 import React, { useEffect, useRef, useCallback, useState } from "react";
 import Image from "next/image";
 import Tesseract from 'tesseract.js';
-import processor from './processor';
 
 export const useCard = () => {
   const [text, setText] = useState<string>();
@@ -56,9 +55,6 @@ export default function CameraFeed() {
 
         video.srcObject = stream;
         video.play()
-          .then(() => {
-            processor.doLoad();
-          })
           .catch((err) => console.error(err));
       })
       .catch((err) => console.error(err));

@@ -6,6 +6,7 @@ import { type AppType } from "next/app";
 import { api } from "~/utils/api";
 
 import "~/styles/globals.css";
+import AuthButton from "~/components/AuthButton";
 
 const MyApp: AppType<{ session: Session | null }> = ({
   Component,
@@ -26,6 +27,7 @@ const MyApp: AppType<{ session: Session | null }> = ({
               <Link href="/about">
                   <span className="text-white mx-2">About</span>
               </Link>
+              <AuthButton />
             </div>
           </div>
         </div>

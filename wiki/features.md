@@ -1,3 +1,18 @@
+With Magic Vault, I can...
+    [ ] create a collection
+    [ ] create a deck
+    [ ] playtest a deck (goldfish)
+
+
+
+
+
+
+
+
+
+
+
 [Reddit thread I liked and thought had some feature value](https://www.reddit.com/r/magicTCG/comments/v74cik/what_would_you_want_out_of_a_mtg_card_collection/)
 
 A list of features someone put that I thought was pretty good:
