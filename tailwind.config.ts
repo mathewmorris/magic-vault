@@ -4,6 +4,9 @@ export default {
   content: ["./src/**/*.{js,ts,jsx,tsx}"],
   theme: {
     extend: {
+      dropShadow: {
+        glow: '0 0 4px #fa0aa9'
+      },
       colors: {
         pink: {
           '100': '#fcd4e6',  // Lightest pink
