@@ -15,6 +15,12 @@ datasource db {
     relationMode = "prisma"
 }
 
+model card {
+  id          String  @id @default(cuid())
+  scryfallId  String
+  name        String
+}
+
 model Collection {
     id            String   @id @default(cuid())
     userId        String
