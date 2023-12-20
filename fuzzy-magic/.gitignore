@@ -1,3 +1,2 @@
 env/
-all-cards*
-
+*.json

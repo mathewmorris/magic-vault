@@ -10,27 +10,9 @@ const cardAddHandler = async (req: NextApiRequest, res: NextApiResponse) => {
   const caller = appRouter.createCaller(ctx);
 
   try {
-    const {
-      name,
-      scryfall_id,
-      scryfall_uri,
-      image_status,
-      layout,
-    } = req.body as { 
-      name: string,
-      scryfall_id: string,
-      scryfall_uri: string,
-      image_status: string,
-      layout: string,
-    };
+    const { scryfallId, name } = req.body as { scryfallId: string, name: string };
 
-    const card = await caller.card.add({ 
-      name,
-      scryfall_id,
-      scryfall_uri,
-      image_status,
-      layout,
-    });
+    const card = await caller.card.add({ name, scryfallId });
     res.status(200).json(card);
 
   } catch (cause) {
@@ -45,4 +27,3 @@ const cardAddHandler = async (req: NextApiRequest, res: NextApiResponse) => {
   }
 };
 
-export default cardAddHandler;

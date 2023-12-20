@@ -16,9 +16,12 @@ datasource db {
 }
 
 model card {
-  id          String  @id @default(cuid())
-  scryfallId  String
-  name        String
+  id              String  @id @default(cuid())
+  name            String  @db.Text
+  scryfall_id     String  @db.Text
+  scryfall_uri    String  @db.Text
+  image_status    String  @db.Text
+  layout          String  @db.Text
 }
 
 model Collection {

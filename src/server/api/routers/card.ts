@@ -7,13 +7,32 @@ import {
 
 export const cardRouter = createTRPCRouter({
   add: publicProcedure
-  .input(z.object({ scryfallId: z.string(), name: z.string() }))
+  .input(z.object({
+    name: z.string(),
+    scryfall_id: z.string(),
+    scryfall_uri: z.string(),
+    image_status: z.string(),
+    layout: z.string().nullish(),
+  }))
   .mutation(async ({ctx, input}) => {
     const card = ctx.prisma.card.create({
       data: input,
     });
 
     return card;
+  }),
+  search: publicProcedure
+  .input(z.string().min(1))
+  .query(async ({ ctx, input }) => {
+    const matches = ctx.prisma.card.findMany({
+      where: {
+        name: {
+          contains: input,
+        }
+      }
+    });
+
+    return matches;
   }),
 });
 
