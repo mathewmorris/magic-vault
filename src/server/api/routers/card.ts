@@ -12,7 +12,7 @@ export const cardRouter = createTRPCRouter({
     scryfall_id: z.string(),
     scryfall_uri: z.string(),
     image_status: z.string(),
-    layout: z.string().nullish(),
+    layout: z.string(),
   }))
   .mutation(async ({ctx, input}) => {
     const card = ctx.prisma.card.create({
