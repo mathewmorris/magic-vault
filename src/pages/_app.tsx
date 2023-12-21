@@ -1,16 +1,16 @@
 import { type Session } from "next-auth";
-import { SessionProvider } from "next-auth/react";
-import Link from "next/link";
 import { type AppType } from "next/app";
 
-import { api } from "~/utils/api";
-
-import "~/styles/globals.css";
-import AuthButton from "~/components/AuthButton";
+import { SessionProvider } from "next-auth/react";
+import Link from "next/link";
 import Head from "next/head";
 import Image from "next/image";
 
-const MyApp: AppType<{ session: Session | null }> = ({
+import { api } from "~/utils/api";
+import "~/styles/globals.css";
+import AuthButton from "~/components/AuthButton";
+
+const MagicVault: AppType<{ session: Session | null }> = ({
   Component,
   pageProps: { session, ...pageProps },
 }) => {
@@ -26,7 +26,10 @@ const MyApp: AppType<{ session: Session | null }> = ({
           <div className="container mx-auto">
             <div className="flex justify-between items-center">
               <Link href="/" className="dark:hover:drop-shadow-glow">
-                <Image src="/magicvault-logo.png" alt="Logo: 8-bit image with a purple circle"  width={50} height={50} />
+                <div className="flex items-center gap-4">
+                  <Image src="/magicvault-logo.png" alt="Logo: 8-bit image with a purple circle"  width={50} height={50} />
+                  <span className="text-2xl">Magic Vault</span>
+                </div>
               </Link>
               <div className="flex items-center gap-2">
                 <Link href="/about" className="dark:hover:drop-shadow-glow font-semibold">
@@ -43,4 +46,5 @@ const MyApp: AppType<{ session: Session | null }> = ({
   );
 };
 
-export default api.withTRPC(MyApp);
+export default api.withTRPC(MagicVault);
+
