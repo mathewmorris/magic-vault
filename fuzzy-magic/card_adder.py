@@ -1,8 +1,25 @@
+import sys
 import ijson
+import json
 import requests
+from decimal import Decimal
+
+# Check for command-line argument
+if len(sys.argv) < 2:
+    print("Usage: python script.py filename.json")
+    sys.exit(1)
+
+filename = sys.argv[1]
 
 # Endpoint URL
 url = "http://localhost:3000/api/card/add"
+
+# Custom JSON Encoder
+class DecimalEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, Decimal):
+            return float(obj)
+        return super(DecimalEncoder, self).default(obj)
 
 # Function to process each card
 def process_card(card):
@@ -11,6 +28,7 @@ def process_card(card):
         'scryfall_id': card['id'],
         'scryfall_uri': card['scryfall_uri'],
         'image_status': card['image_status'],
+        'image_uris': card['image_uris'],
         'layout': card['layout'],
     }
 
@@ -21,13 +39,13 @@ def process_card(card):
             verify=False,
             headers={'Content-Type': 'application/json'}
         )
-        print("Status Code:", response.status_code)
-        print("Response:", response.json())
+        pretty_card = json.dumps(data, cls=DecimalEncoder, indent=4)
+        print(f"Card data successfully sent. {pretty_card}")
     except requests.exceptions.RequestException as e:
         print("Error:", e)
 
 # Open and process the JSON file in chunks
-with open('./default-cards-20231215220525.json', 'rb') as file:
+with open(filename, 'rb') as file:
     parser = ijson.items(file, 'item')
     for card in parser:
         process_card(card)
