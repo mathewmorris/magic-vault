@@ -15,13 +15,16 @@ datasource db {
     relationMode = "prisma"
 }
 
-model card {
-  id              String  @id @default(cuid())
-  name            String  @db.Text
-  scryfall_id     String  @db.Text
-  scryfall_uri    String  @db.Text
-  image_status    String  @db.Text
-  layout          String  @db.Text
+model Card {
+  id              String    @id @default(cuid())
+  name            String    @db.Text
+  scryfall_id     String    @db.Text
+  scryfall_uri    String    @db.Text
+  image_status    String    @db.Text
+  image_uris      Json?
+  layout          String    @db.Text
+
+  @@map("cards") 
 }
 
 model Collection {
