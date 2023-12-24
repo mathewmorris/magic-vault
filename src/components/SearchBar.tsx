@@ -18,12 +18,12 @@ export default function SearchBar() {
       <div className="flex gap-5 flex-wrap">
         {searchResults && (searchResults.length == 0 ? <p>No results</p> : (
           searchResults.map((card) =>  {
-            const images = card.image_uris as { small: string };
+            const images = card.image_uris as { small: string } | null;
 
             return (
             <div key={card.id}>
               <p>{card.name}</p>
-                <Image src={images.small} width={146} height={204} alt={card.name} />
+                {images?.small && <Image src={images.small} width={146} height={204} alt={card.name} />}
             </div>
           )})
         ))}
