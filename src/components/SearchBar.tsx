@@ -1,3 +1,4 @@
+import Image from "next/image";
 import useSearch from "~/hooks/useSearch";
 
 export default function SearchBar() {
@@ -14,11 +15,19 @@ export default function SearchBar() {
       />
       {isError && <p className="text-red-500">We have an issue boss.</p>}
       {isFetching && <p>Searching...</p>}
-      {searchResults && (searchResults.length == 0 ? <p>No results</p> : (
-        searchResults.map((card) => (
-          <p key={card.id}>{card.name}</p>
-        ))
-      ))}
+      <div className="flex gap-5 flex-wrap">
+        {searchResults && (searchResults.length == 0 ? <p>No results</p> : (
+          searchResults.map((card) =>  {
+            const images = card.image_uris as { small: string } | null;
+
+            return (
+            <div key={card.id}>
+              <p>{card.name}</p>
+                {images?.small && <Image src={images.small} width={146} height={204} alt={card.name} />}
+            </div>
+          )})
+        ))}
+      </div>
     </>
   );
 };

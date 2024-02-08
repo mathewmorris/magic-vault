@@ -21,7 +21,10 @@ model Card {
   scryfall_id     String  @unique
   scryfall_uri    String  @db.Text
   image_status    String  @db.Text
+  image_uris      Json?
   layout          String  @db.Text
+
+  @@map("cards") 
 }
 
 model Collection {
