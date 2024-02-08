@@ -15,10 +15,10 @@ datasource db {
     relationMode = "prisma"
 }
 
-model card {
+model Card {
   id              String  @id @default(cuid())
   name            String  @db.Text
-  scryfall_id     String  @db.Text
+  scryfall_id     String  @unique
   scryfall_uri    String  @db.Text
   image_status    String  @db.Text
   layout          String  @db.Text
