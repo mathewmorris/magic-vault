@@ -10,11 +10,41 @@ This is a [T3 Stack](https://create.t3.gg/) project bootstrapped with `create-t3
         npm install
     ```
 
-- create .env file
+- download .env file
 
     ```bash
-        cp .env.example .env
+        vercel env pull
     ```
+    if you don't have vercel run `npm install -g vercel@latest`
+
+    IMPORTANT: rename `.env.local` to `.env`
+
+    IMPORTANT: remove everything in .env for vercel (usually starts at NX_DAEMON)
+    
+    The vercel env vars mess with most things you want to do locally, like next_auth and prisma migrations. So removing them will help. There's probably a more elegant solution, but this was the easiest path.
+
+- get your local mysql database ready to go
+    - get mysql up and running [(more info here)](https://dev.mysql.com/doc/mysql-getting-started/en/#mysql-getting-started-installing)
+    - create `magicvaultdb` database [(more info here)](https://dev.mysql.com/doc/refman/8.0/en/creating-database.html)
+        ```mysql
+            CREATE DATABASE magicvaultdb;
+        ```
+    - create `developer` user [(more info here)](https://dev.mysql.com/doc/refman/8.0/en/create-user.html)
+        ```mysql
+            CREATE USER 'developer'@'localhost' IDENTIFIED BY 'password';
+        ```
+    - grant permissions to `developer` user for `magicvaultdb` database [(more info here)](https://dev.mysql.com/doc/refman/8.0/en/grant.html#grant-database-privileges)
+        ```mysql
+            GRANT ALL ON magicvaultdb.* TO 'developer'@'localhost';
+        ```
+    - grant shadow database user permissions [(more info here)](https://www.prisma.io/docs/orm/prisma-migrate/understanding-prisma-migrate/shadow-database#shadow-database-user-permissions)
+        ```mysql
+            GRANT CREATE, ALTER, DROP, REFERENCES ON *.* TO 'developer'@'localhost';
+        ```
+    - apply prisma schema to db
+        ```bash
+            npx prisma db push
+        ```
 
 - run `npm run dev`
 

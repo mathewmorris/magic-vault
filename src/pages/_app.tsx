@@ -1,41 +1,50 @@
 import { type Session } from "next-auth";
-import { SessionProvider } from "next-auth/react";
-import Link from "next/link";
 import { type AppType } from "next/app";
 
-import { api } from "~/utils/api";
+import { SessionProvider } from "next-auth/react";
+import Link from "next/link";
+import Head from "next/head";
+import Image from "next/image";
 
+import { api } from "~/utils/api";
 import "~/styles/globals.css";
 import AuthButton from "~/components/AuthButton";
 
-const MyApp: AppType<{ session: Session | null }> = ({
+const MagicVault: AppType<{ session: Session | null }> = ({
   Component,
   pageProps: { session, ...pageProps },
 }) => {
   return (
     <SessionProvider session={session}>
-      
-    <div className="dark:bg-slate-800 min-h-screen dark:text-slate-50">
-      <nav className="bg-violet-800 p-4">
-        <div className="container mx-auto">
-          <div className="flex justify-between">
-            <div className="text-white font-bold">Magic Vault</div>
-            <div>
-              <Link href="/">
-                  <span className="text-white mx-2">Home</span>
+      <Head>
+        <title>magicvault</title>
+        <meta name="description" content="A web app for managing and playtesting your Magic the Gathering card collection." />
+        <link rel="icon" href="/favicon.ico" />
+      </Head>
+      <main className="min-h-screen dark:bg-gray-900 dark:text-white">
+        <nav className="p-4 dark:bg-gray-950">
+          <div className="container mx-auto">
+            <div className="flex justify-between items-center">
+              <Link href="/" className="dark:hover:drop-shadow-glow">
+                <div className="flex items-center gap-4">
+                  <Image src="/magicvault-logo.png" alt="Logo: 8-bit image with a purple circle"  width={50} height={50} />
+                  <span className="text-2xl">Magic Vault</span>
+                </div>
               </Link>
-              <Link href="/about">
-                  <span className="text-white mx-2">About</span>
-              </Link>
-              <AuthButton />
+              <div className="flex items-center gap-2">
+                <Link href="/about" className="dark:hover:drop-shadow-glow font-semibold">
+                    <span className="mx-2">About</span>
+                </Link>
+                <AuthButton />
+              </div>
             </div>
           </div>
-        </div>
-      </nav>
-      <Component {...pageProps} />
-    </div>
+        </nav>
+        <Component {...pageProps} />
+      </main>
     </SessionProvider>
   );
 };
 
-export default api.withTRPC(MyApp);
+export default api.withTRPC(MagicVault);
+
