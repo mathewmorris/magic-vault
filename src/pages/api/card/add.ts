@@ -35,15 +35,15 @@ const cardAddHandler = async (req: NextApiRequest, res: NextApiResponse) => {
       image_uris: CardImagery,
     };
 
-    const card = await caller.card.add({ 
-      name,
-      scryfall_id,
-      scryfall_uri,
-      image_status,
-      layout,
-      image_uris,
-    });
-    res.status(200).json(card);
+//    const card = await caller.card.add({ 
+//      name,
+//      scryfall_id,
+//      scryfall_uri,
+//      image_status,
+//      layout,
+//      image_uris,
+//    });
+    res.status(200);
 
   } catch (cause) {
     if (cause instanceof TRPCError) {
