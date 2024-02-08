@@ -3,14 +3,16 @@ import Image from "next/image";
 import Tesseract from 'tesseract.js';
 
 export const useCard = () => {
-  const [text, setText] = useState<string>();
+  const [text] = useState<string>();
     const recognizeCard = useCallback((image: Tesseract.ImageLike) => {
       Tesseract.recognize(
           image,
           'eng',
           ).then((data) => {
-              setText(data.text);
-            });
+            console.log(data);
+          }).catch((error) => {
+            console.error(error);
+          });
     }, []);
     
     return { recognizeCard, text };
