@@ -1,4 +1,4 @@
-[
+export const cards = [
   {
     "object": "card",
     "id": "0000579f-7b35-4ed3-b44c-db2a538066fe",
@@ -1190,3 +1190,4 @@
     }
   }
 ]
+
