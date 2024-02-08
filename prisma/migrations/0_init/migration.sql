@@ -1,6 +1,23 @@
 -- CreateTable
+CREATE TABLE `cards` (
+    `id` VARCHAR(191) NOT NULL,
+    `name` TEXT NOT NULL,
+    `scryfall_id` VARCHAR(191) NOT NULL,
+    `scryfall_uri` TEXT NOT NULL,
+    `image_status` TEXT NOT NULL,
+    `image_uris` JSON NULL,
+    `layout` TEXT NOT NULL,
+
+    UNIQUE INDEX `cards_scryfall_id_key`(`scryfall_id`),
+    PRIMARY KEY (`id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- CreateTable
 CREATE TABLE `Collection` (
     `id` VARCHAR(191) NOT NULL,
+    `userId` VARCHAR(191) NOT NULL,
+    `name` VARCHAR(191) NOT NULL DEFAULT 'My Collection',
+    `description` VARCHAR(191) NOT NULL,
     `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     `updatedAt` DATETIME(3) NOT NULL,
 
@@ -59,3 +76,4 @@ CREATE TABLE `VerificationToken` (
     UNIQUE INDEX `VerificationToken_token_key`(`token`),
     UNIQUE INDEX `VerificationToken_identifier_token_key`(`identifier`, `token`)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
