@@ -11,7 +11,7 @@ ALTER TABLE `Collection` ADD COLUMN `description` VARCHAR(191) NOT NULL,
     ADD COLUMN `userId` VARCHAR(191) NOT NULL;
 
 -- CreateTable
-CREATE TABLE `card` (
+CREATE TABLE `Card` (
     `id` VARCHAR(191) NOT NULL,
     `name` TEXT NOT NULL,
     `scryfall_id` TEXT NOT NULL,
