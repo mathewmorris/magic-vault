@@ -22,9 +22,9 @@ model Card {
   scryfall_uri    String  @db.Text
   image_status    String  @db.Text
   image_uris      Json?
+  card_faces      Json?
+  all_parts       Json?
   layout          String  @db.Text
-
-  @@map("cards") 
 }
 
 model Collection {
