@@ -16,18 +16,7 @@ async function main() {
       scryfall_uri: card.scryfall_uri,
     }))
   });
-  const lathril = await prisma.card.upsert({
-    where: { scryfall_id: '098jk2' },
-    update: {},
-    create: {
-      name: 'Lathril Blade of Elves',
-      layout: 'oihwen',
-      scryfall_id: '098jk2',
-      image_status: 'lkffj',
-      scryfall_uri: 'dsadfk',
-    },
-  })
-  console.log({ lathril })
+  console.log('cards seeded!');
 }
 
 main()
