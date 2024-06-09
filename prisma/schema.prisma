@@ -17,7 +17,7 @@ model Card {
   image_uris      Json?   @db.JsonB
   card_faces      Json?   @db.JsonB
   all_parts       Json?   @db.JsonB
-  layout          String  
+  layout          String
 }
 
 model Collection {
