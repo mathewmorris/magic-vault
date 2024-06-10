@@ -1,4 +1,4 @@
-import { type Card } from "@prisma/client";
+import type { Prisma, Card } from "@prisma/client";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
@@ -46,16 +46,22 @@ export const cardRouter = createTRPCRouter({
         });
         console.log('newCards; ', newCards);
         await ctx.prisma.card.createMany({
-            data: newCards.map((card) => ({
+            data: newCards.map((card) => {
+              const all_parts = card.all_parts as Prisma.JsonObject;
+              const card_faces = card.card_faces as Prisma.JsonObject;
+              const image_uris = card.image_uris as Prisma.JsonObject;
+
+              return {
                 scryfall_id: card.id,
                 scryfall_uri: card.scryfall_uri,
                 name: card.name,
                 layout: card.layout,
                 image_status: card.image_status,
-                all_parts: card.all_parts,
-                card_faces: card.card_faces,
-                image_uris: card.image_uris,
-            })),
+                all_parts,
+                card_faces,
+                image_uris,
+            }}),
+            skipDuplicates: true,
         });
 
         return scryfallResult.data;

@@ -1,4 +1,4 @@
-import { Card } from "@prisma/client";
+import type { Card } from "@prisma/client";
 import Image from "next/image";
 import { useState } from "react";
 import useSearch from "~/hooks/useSearch";
