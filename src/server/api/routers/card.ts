@@ -1,4 +1,4 @@
-import { type Prisma, type Card } from "@prisma/client";
+import type { Prisma, Card } from "@prisma/client";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
@@ -20,14 +20,15 @@ export const cardRouter = createTRPCRouter({
     .query(async ({ ctx, input }) => {
         // TODO: Create a searchRouter that will save results of search calls to scryfallAPI
         // will use to see if search in db returns same number of results
-        // const matches = await ctx.prisma.card.findMany({
-        //     where: {
-        //         name: {
-        //             contains: input,
-        //         }
-        //     }
-        // });
+        const matches = await ctx.prisma.card.findMany({
+            where: {
+                name: {
+                    contains: input,
+                }
+            }
+        });
 
+        console.log('matches: ', matches);
         const scryfallSearch = await fetch(`https://api.scryfall.com/cards/search?q=${input}`);
 
         if (!scryfallSearch.ok) {
@@ -38,22 +39,32 @@ export const cardRouter = createTRPCRouter({
             })
         }
 
-        const cards = await scryfallSearch.json() as ScryfallSearchResponse;
+        const scryfallResult = await scryfallSearch.json() as ScryfallSearchResponse;
+        const newCards = scryfallResult.data.filter(card => {
+            const matchesIds = matches.map(match => match.scryfall_id);
+            return !matchesIds.includes(card.id);
+        });
+        console.log('newCards; ', newCards);
         await ctx.prisma.card.createMany({
-            skipDuplicates: true,
-            data: cards.data.map((card) => ({
+            data: newCards.map((card) => {
+              const all_parts = card.all_parts as Prisma.JsonObject;
+              const card_faces = card.card_faces as Prisma.JsonObject;
+              const image_uris = card.image_uris as Prisma.JsonObject;
+
+              return {
                 scryfall_id: card.id,
                 scryfall_uri: card.scryfall_uri,
                 name: card.name,
                 layout: card.layout,
                 image_status: card.image_status,
-                all_parts: card.all_parts as Prisma.JsonArray,
-                card_faces: card.card_faces as Prisma.JsonArray,
-                image_uris: card.image_uris as Prisma.JsonArray,
-            })),
+                all_parts,
+                card_faces,
+                image_uris,
+            }}),
+            skipDuplicates: true,
         });
 
-        return cards.data;
+        return scryfallResult.data;
     }),
 });
 

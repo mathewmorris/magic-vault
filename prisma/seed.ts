@@ -4,8 +4,8 @@ import { cards } from './cards';
 const prisma = new PrismaClient()
 
 async function main() {
-  await prisma.card.deleteMany();
-  console.log('deleted cards');
+  await prisma.card.deleteMany()
+  console.log('deleted cards')
   await prisma.card.createMany({
     data: cards.map((card) => ({
       name: card.name,
@@ -15,8 +15,16 @@ async function main() {
       image_uris: card.image_uris,
       scryfall_uri: card.scryfall_uri,
     }))
-  });
-  console.log('cards seeded!');
+  })
+  console.log('cards seeded!')
+  await prisma.user.create({
+    data: {
+      id: '1234',
+      name: 'John',
+      email: 'john.magicvault@mathewmorris.com',
+    }
+  })
+  console.log('user seeded!')
 }
 
 main()

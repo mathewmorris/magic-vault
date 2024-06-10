@@ -1,59 +1,41 @@
 # Magic Vault
+> A web application to keep track of your Magic the Gathering collection
 
-This is a [T3 Stack](https://create.t3.gg/) project bootstrapped with `create-t3-app`.
+## Features
+- [x] Search for any card
+- [ ] Create collections
+- [ ] See value of your collections (updated daily)
 
-## Quickstart
+## Stack
+- This is a [T3 Stack](https://create.t3.gg/) project bootstrapped with `create-t3-app`.
+- We are using [Supabase](https://supabase.com/) for our database at the moment, we might use other features as we need them.
+
+## Local Development
 
 - install dependencies
-
     ```bash
         npm install
     ```
 
 - download .env file
-
     ```bash
-        vercel env pull
+        npx vercel env pull
     ```
-    if you don't have vercel run `npm install -g vercel@latest`
+    - rename `.env.local` to `.env`
+    - remove everything in .env for vercel   (usually starts at NX_DAEMON)
+   
+    > The vercel env vars mess with most things you want to do locally, like next_auth and prisma migrations. So removing them will help. There's probably a more elegant solution, but this was the easiest path.
 
-    IMPORTANT: rename `.env.local` to `.env`
-
-    IMPORTANT: remove everything in .env for vercel (usually starts at NX_DAEMON)
-    
-    The vercel env vars mess with most things you want to do locally, like next_auth and prisma migrations. So removing them will help. There's probably a more elegant solution, but this was the easiest path.
-
-- get your local mysql database ready to go
-    - get mysql up and running [(more info here)](https://dev.mysql.com/doc/mysql-getting-started/en/#mysql-getting-started-installing)
-    - create `magicvaultdb` database [(more info here)](https://dev.mysql.com/doc/refman/8.0/en/creating-database.html)
-        ```mysql
-            CREATE DATABASE magicvaultdb;
-        ```
-    - create `developer` user [(more info here)](https://dev.mysql.com/doc/refman/8.0/en/create-user.html)
-        ```mysql
-            CREATE USER 'developer'@'localhost' IDENTIFIED BY 'password';
-        ```
-    - grant permissions to `developer` user for `magicvaultdb` database [(more info here)](https://dev.mysql.com/doc/refman/8.0/en/grant.html#grant-database-privileges)
-        ```mysql
-            GRANT ALL ON magicvaultdb.* TO 'developer'@'localhost';
-        ```
-    - grant shadow database user permissions [(more info here)](https://www.prisma.io/docs/orm/prisma-migrate/understanding-prisma-migrate/shadow-database#shadow-database-user-permissions)
-        ```mysql
-            GRANT CREATE, ALTER, DROP, REFERENCES ON *.* TO 'developer'@'localhost';
-        ```
-    - apply prisma schema to db
-        ```bash
-            npx prisma db push
-        ```
+- get your [local supabase database](https://supabase.com/docs/guides/cli/local-development) ready to go
+    ```
+        npx supabase start
+    ```
+    ```
+        npx prisma db push // Syncs database with schema
+    ```
+    ```
+        npx prisma db seed // Seeds database
+    ```
 
 - run `npm run dev`
-
-## Learn More
-
-To learn more about the [T3 Stack](https://create.t3.gg/), take a look at the following resources:
-
-- [Documentation](https://create.t3.gg/)
-- [Learn the T3 Stack](https://create.t3.gg/en/faq#what-learning-resources-are-currently-available) — Check out these awesome tutorials
-
-You can check out the [create-t3-app GitHub repository](https://github.com/t3-oss/create-t3-app) — your feedback and contributions are welcome!
 

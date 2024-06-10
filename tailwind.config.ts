@@ -7,6 +7,16 @@ export default {
       dropShadow: {
         glow: '0 0 4px #fa0aa9'
       },
+      container: {
+        padding: {
+          DEFAULT: '1rem',
+          sm: '2rem',
+          md: '3rem',
+          lg: '4rem',
+          xl: '5rem',
+          '2xl': '6rem',
+        },
+      },
       colors: {
         pink: {
           '100': '#fcd4e6',  // Lightest pink
