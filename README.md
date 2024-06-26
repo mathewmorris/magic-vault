@@ -21,10 +21,6 @@
     ```bash
         npx vercel env pull
     ```
-    - rename `.env.local` to `.env`
-    - remove everything in .env for vercel   (usually starts at NX_DAEMON)
-   
-    > The vercel env vars mess with most things you want to do locally, like next_auth and prisma migrations. So removing them will help. There's probably a more elegant solution, but this was the easiest path.
 
 - get your [local supabase database](https://supabase.com/docs/guides/cli/local-development) ready to go
     ```
