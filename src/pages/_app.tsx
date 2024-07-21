@@ -17,7 +17,7 @@ const MagicVault: AppType<{ session: Session | null }> = ({
   return (
     <SessionProvider session={session}>
       <Head>
-        <title>magicvault</title>
+        <title>Magic Vault</title>
         <meta name="description" content="A web app for managing and playtesting your Magic the Gathering card collection." />
         <link rel="icon" href="/favicon.ico" />
       </Head>
@@ -27,13 +27,13 @@ const MagicVault: AppType<{ session: Session | null }> = ({
             <div className="flex justify-between items-center">
               <Link href="/" className="dark:hover:drop-shadow-glow">
                 <div className="flex items-center gap-4">
-                  <Image src="/magicvault-logo.png" alt="Logo: 8-bit image with a purple circle"  width={50} height={50} />
+                  <Image src="/magicvault-logo.png" alt="Logo: 8-bit image with a purple circle" width={50} height={50} />
                   <span className="text-2xl">Magic Vault</span>
                 </div>
               </Link>
               <div className="flex items-center gap-2">
                 <Link href="/about" className="dark:hover:drop-shadow-glow font-semibold">
-                    <span className="mx-2">About</span>
+                  <span className="mx-2">About</span>
                 </Link>
                 <AuthButton />
               </div>
