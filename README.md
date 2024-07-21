@@ -8,34 +8,23 @@
 
 ## Stack
 - This is a [T3 Stack](https://create.t3.gg/) project bootstrapped with `create-t3-app`.
-- We are using [Supabase](https://supabase.com/) for our database at the moment, we might use other features as we need them.
+- Postgres
 
 ## Local Development
+> I'm using Docker for local development. You should be able to run one command to get everything up and running; ready for development.
 
-- install dependencies
+- link to vercel
     ```bash
-        npm install
+        npx vercel link
     ```
+    link to the existing project `magic-vault`
 
 - download .env file
     ```bash
         npx vercel env pull
     ```
-    - rename `.env.local` to `.env`
-    - remove everything in .env for vercel   (usually starts at NX_DAEMON)
-   
-    > The vercel env vars mess with most things you want to do locally, like next_auth and prisma migrations. So removing them will help. There's probably a more elegant solution, but this was the easiest path.
 
-- get your [local supabase database](https://supabase.com/docs/guides/cli/local-development) ready to go
-    ```
-        npx supabase start
-    ```
-    ```
-        npx prisma db push // Syncs database with schema
-    ```
-    ```
-        npx prisma db seed // Seeds database
-    ```
+- run `docker compose up -d`
 
-- run `npm run dev`
+The app should be exposed at `localhost:3000` ready for development.
 
