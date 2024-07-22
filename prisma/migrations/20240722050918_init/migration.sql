@@ -5,9 +5,9 @@ CREATE TABLE "Card" (
     "scryfall_id" TEXT NOT NULL,
     "scryfall_uri" TEXT NOT NULL,
     "image_status" TEXT NOT NULL,
-    "image_uris" TEXT,
-    "card_faces" TEXT,
-    "all_parts" TEXT,
+    "image_uris" JSONB,
+    "card_faces" JSONB,
+    "all_parts" JSONB,
     "layout" TEXT NOT NULL,
 
     CONSTRAINT "Card_pkey" PRIMARY KEY ("id")
