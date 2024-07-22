@@ -5,6 +5,7 @@ import { SessionProvider } from "next-auth/react";
 import Link from "next/link";
 import Head from "next/head";
 import Image from "next/image";
+import { Analytics } from "@vercel/analytics/react";
 
 import { api } from "~/utils/api";
 import "~/styles/globals.css";
@@ -41,6 +42,7 @@ const MagicVault: AppType<{ session: Session | null }> = ({
           </div>
         </nav>
         <Component {...pageProps} />
+        <Analytics />
       </main>
     </SessionProvider>
   );
