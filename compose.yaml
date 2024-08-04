@@ -9,10 +9,9 @@
 # https://github.com/docker/awesome-compose
 services:
   next-app:
-    container_name: next-app
+    container_name: magicvault-next-app
     build:
       context: .
-      dockerfile: dev.Dockerfile
     env_file: ".env.local"
     volumes:
       - ./src:/app/src
@@ -31,6 +30,7 @@ services:
 # to set the database password. You must create `db/password.txt` and add
 # a password of your choosing to it before running `docker-compose up`.
   db:
+    container_name: magicvault-db
     image: postgres
     restart: always
     user: postgres

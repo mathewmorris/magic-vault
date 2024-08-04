@@ -3,7 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "build": "prisma generate && next build",
+    "build": "next build",
+    "postinstall": "prisma generate",
     "dev": "next dev",
     "lint": "next lint",
     "start": "next start",
@@ -13,7 +14,7 @@
     "vercel:link": "vercel link",
     "db:gen": "prisma generate",
     "db:seed": "prisma db seed",
-    "db:migrate": "prisma db migrate",
+    "db:migrate": "prisma migrate dev",
     "db:push": "prisma db push"
   },
   "dependencies": {
