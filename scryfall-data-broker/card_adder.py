@@ -15,13 +15,15 @@ filename = sys.argv[1]
 url = "http://localhost:3000/api/card/add"
 
 # Custom JSON Encoder
+
+
 class DecimalEncoder(json.JSONEncoder):
     def default(self, obj):
         if isinstance(obj, Decimal):
             return float(obj)
         return super(DecimalEncoder, self).default(obj)
 
-# Function to process each card
+
 def process_card(card):
     data = {
         'name': card['name'],
@@ -34,19 +36,23 @@ def process_card(card):
 
     try:
         response = requests.post(
-            url, 
-            json=data, 
+            url,
+            json=data,
             verify=False,
             headers={'Content-Type': 'application/json'}
         )
-        pretty_card = json.dumps(data, cls=DecimalEncoder, indent=4)
-        print(f"Card data successfully sent. {pretty_card}")
+
+        if response.status_code == requests.codes.ok:
+            pretty_card = json.dumps(data, cls=DecimalEncoder, indent=4)
+            print(f"Card data successfully sent. \n ===== \n{pretty_card}\n")
+        else:
+            print(response.status_code, response.reason)
+
     except requests.exceptions.RequestException as e:
         print("Error:", e)
 
-# Open and process the JSON file in chunks
+
 with open(filename, 'rb') as file:
     parser = ijson.items(file, 'item')
     for card in parser:
         process_card(card)
-
