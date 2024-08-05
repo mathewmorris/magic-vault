@@ -163,9 +163,13 @@ interface MigrateResult {
   batchResults: UpsertBatchResult[];
   totalInserted: number;
   totalUpdated: number;
+  duration: number;
+  totalProcessed: number;
 }
 
 async function simpleMigrate(prisma: PrismaClient): Promise<MigrateResult> {
+
+  const start = new Date().getTime();
 
   const response = await fetch('https://api.scryfall.com/bulk-data/default-cards');
   const metadata: CardDataJson = await response.json() as CardDataJson;
@@ -210,9 +214,13 @@ async function simpleMigrate(prisma: PrismaClient): Promise<MigrateResult> {
     await new Promise(resolve => setTimeout(resolve, 1000));
   }
   console.log('Migration complete');
+  const end = new Date().getTime();
+  const duration = end - start;
   return {
+    totalProcessed: results.reduce((acc, result) => acc + result.numberInserted + result.numberUpdated + result.numberSkipped, 0),
     batchResults: results,
     totalInserted: results.reduce((acc, result) => acc + result.numberInserted, 0),
-    totalUpdated: results.reduce((acc, result) => acc + result.numberUpdated, 0)
+    totalUpdated: results.reduce((acc, result) => acc + result.numberUpdated, 0),
+    duration: duration
   };
 }
