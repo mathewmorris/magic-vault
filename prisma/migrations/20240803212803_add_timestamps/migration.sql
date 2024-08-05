@@ -1,0 +1,3 @@
+-- AlterTable
+ALTER TABLE "Card" ADD COLUMN     "created_at" TIMESTAMPTZ(3) DEFAULT CURRENT_TIMESTAMP,
+ADD COLUMN     "updated_at" TIMESTAMPTZ(3);

@@ -4,6 +4,7 @@ import { cards } from './cards';
 const prisma = new PrismaClient()
 
 async function main() {
+  console.dir(process.env);
   await prisma.card.deleteMany()
   console.log('deleted cards')
   await prisma.card.createMany({

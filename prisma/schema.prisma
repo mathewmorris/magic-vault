@@ -8,6 +8,13 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model CardStash {
+  id      Int      @id @default(autoincrement())
+  data            Json?   @db.JsonB
+  createdAt       DateTime?   @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime?   @updatedAt @map("updated_at") @db.Timestamptz(3)
+}
+
 model Card {
   id              String  @id @default(cuid())
   name            String  
@@ -18,6 +25,9 @@ model Card {
   card_faces      Json?   @db.JsonB
   all_parts       Json?   @db.JsonB
   layout          String
+  createdAt       DateTime?   @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime?   @updatedAt @map("updated_at") @db.Timestamptz(3)
+  hash            String?
 }
 
 model Collection {
