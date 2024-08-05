@@ -11,7 +11,7 @@ import {
   createTRPCRouter,
   protectedProcedure,
 } from "~/server/api/trpc";
-import type { PrismaClient } from '@prisma/client';
+import type { Card, PrismaClient, PrismaPromise } from '@prisma/client';
 
 interface CardDataJson {
   uri: string;
@@ -42,8 +42,7 @@ interface CardData {
 
 export const migrationRouter = createTRPCRouter({
   runSimpleMigration: protectedProcedure.input(z.string().min(0)).query(async ({ ctx, input }) =>  { 
-    await simpleMigrate(ctx.prisma);
-    return {};
+    return await simpleMigrate(ctx.prisma);
   }),
 });
 
@@ -62,9 +61,16 @@ interface CardFromFile {
   value: CardData;
 }
 
+interface UpsertBatchResult {
+  numberInserted: number;
+  numberUpdated: number;
+  numberSkipped: number;
+}
 
 
-const upsertBatch = async (cardBatch: CardFromFile[], prisma: PrismaClient) => {
+const upsertBatch = async (cardBatch: CardFromFile[], prisma: PrismaClient) : Promise<UpsertBatchResult> => {
+  let numberInserted = 0;
+  let numberUpdated = 0;
   const ids = cardBatch.map(card => card.value.id);
   const cardBatchMap = new Map<string, CardData>();
   cardBatch.forEach(card => cardBatchMap.set(card.value.id, card.value));
@@ -86,7 +92,7 @@ const upsertBatch = async (cardBatch: CardFromFile[], prisma: PrismaClient) => {
     console.log("No changes to update for this batch");
   }
   const cardsToInsert = cardBatch.filter(card => !existingCardIds.includes(card.value.id));
-  await prisma.card.createMany({
+  const created = await prisma.card.createMany({
     data: cardsToInsert.map(card => ({
       name: card.value.name,
       scryfall_id: card.value.id,
@@ -97,26 +103,35 @@ const upsertBatch = async (cardBatch: CardFromFile[], prisma: PrismaClient) => {
       hash: hashJsonString(JSON.stringify(card.value))
     }))
   });
+  numberInserted = created.count;
+  const updates = [];
   for (const card of cardsNeedUpdate) {
     const updatedCard = cardBatchMap.get(card.scryfall_id);
     if (updatedCard === undefined) {
       console.error(`Failed to find updated card for id ${card.scryfall_id}`);
       continue;
     }
-    await prisma.card.update({
-      where: {
-        scryfall_id: card.scryfall_id
-      },
-      data: {
-        name: updatedCard.name,
-        layout: updatedCard.layout,
-        image_status: updatedCard.image_status,
-        image_uris: updatedCard.image_uris,
-        scryfall_uri: updatedCard.scryfall_uri,
-        hash: hashJsonString(JSON.stringify(updatedCard))
-      }
-    });
-  }
+    updates.push(prisma.card.update({
+          where: {
+            scryfall_id: card.scryfall_id
+          },
+          data: {
+            name: updatedCard.name,
+            layout: updatedCard.layout,
+            image_status: updatedCard.image_status,
+            image_uris: updatedCard.image_uris,
+            scryfall_uri: updatedCard.scryfall_uri,
+            hash: hashJsonString(JSON.stringify(updatedCard))
+          }
+        }));
+    }
+  const updated = await prisma.$transaction(updates);
+  numberUpdated = updated.length;
+  return {
+    numberInserted,
+    numberUpdated,
+    numberSkipped: cardBatch.length - numberInserted - numberUpdated
+  };
 }
 
 function hashString(str: string): number {
@@ -144,39 +159,48 @@ function hashJsonString(jsonString: string): string | null {
   }
 }
 
-async function simpleMigrate(prisma: PrismaClient): Promise<void> {
+interface MigrateResult {
+  batchResults: UpsertBatchResult[];
+  totalInserted: number;
+  totalUpdated: number;
+}
+
+async function simpleMigrate(prisma: PrismaClient): Promise<MigrateResult> {
 
   const response = await fetch('https://api.scryfall.com/bulk-data/default-cards');
   const metadata: CardDataJson = await response.json() as CardDataJson;
   const filename = metadata.download_uri.split('/').pop();
   const folder = process.cwd();
-  const filePath = `${folder}/${filename}`;
+  const filePath = `${folder}/batch_data/${filename}`;
   console.log(filePath);
   if (!existsSync(filePath)) {
+    console.log(`Downloading file ${filename}`);
     await downloadJsonFile(metadata.download_uri, filePath);
   };
 
   const streamPipeline = chain([
     createReadStream(filePath),
     StreamArray.withParser(),
-    new Batch({batchSize: 100})  ]);
+    new Batch({batchSize: 1000})  ]);
   
   let done = false;
   let batchCount = 0;
+  const results: UpsertBatchResult[] = [];
   
   streamPipeline.on('data', data => {
     console.log('Batch size:', data.length);
     if (data.length > 0) {
       upsertBatch(data as CardFromFile[], prisma)
-        .then(() => {
+        .then((result: UpsertBatchResult) => {
           batchCount += 1;
+          results.push(result);
           console.log(`Done upserting batch ${batchCount}`);
           // streamPipeline.destroy();
           
         })
         .catch(err => {
           console.error('Error in upsertBatch:', err);
-          streamPipeline.destroy();
+          streamPipeline.pause();
         });
       }
   });
@@ -185,4 +209,10 @@ async function simpleMigrate(prisma: PrismaClient): Promise<void> {
   while (!done) {
     await new Promise(resolve => setTimeout(resolve, 1000));
   }
+  console.log('Migration complete');
+  return {
+    batchResults: results,
+    totalInserted: results.reduce((acc, result) => acc + result.numberInserted, 0),
+    totalUpdated: results.reduce((acc, result) => acc + result.numberUpdated, 0)
+  };
 }
