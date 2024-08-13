@@ -2,6 +2,7 @@ import { useSession } from "next-auth/react";
 import SearchBar from "~/components/SearchBar";
 import { api } from '~/utils/api';
 
+// TODO: Add more admin user ids?
 const admins = [
   'clzeo3i7q003dgeb0yeqowtrf'
 ]
