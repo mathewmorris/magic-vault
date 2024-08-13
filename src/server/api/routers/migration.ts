@@ -11,6 +11,7 @@ import {
   createTRPCRouter,
   protectedProcedure,
 } from "~/server/api/trpc";
+import { Prisma } from '@prisma/client'
 import type { Card, PrismaClient, PrismaPromise } from '@prisma/client';
 
 interface CardDataJson {
@@ -67,6 +68,40 @@ interface UpsertBatchResult {
   numberSkipped: number;
 }
 
+interface CardsThatNeedUpdates {
+  ids: string[];
+}
+
+const findChangedCards = async (cardBatch: CardFromFile[], prisma: PrismaClient) : Promise<CardsThatNeedUpdates> => {
+  const hashesToCheck = cardBatch.map(card => ({
+    id: card.value.id,
+    hash: hashJsonString(JSON.stringify(card.value)),
+  }));
+
+  console.dir(hashesToCheck);
+  // Create a string that constructs the VALUES part of the query
+  // Manually construct the VALUES part of the query
+  const valuesString = hashesToCheck.map(h => `('${h.id}', '${h.hash}')`).join(', ');
+
+  const query = `
+    SELECT c.scryfall_id
+    FROM "Card" c
+    JOIN (
+      VALUES ${valuesString}
+    ) AS v(id, hash)
+    ON c.scryfall_id = v.id
+    WHERE c.hash != v.hash
+  `;
+  console.dir(query);
+
+  const existingCards = await prisma.$queryRawUnsafe<{ scryfall_id: string }[]>(query);
+  console.dir(existingCards);
+
+  return {
+    ids: existingCards.map(card => card.scryfall_id),
+  };
+}
+
 
 const upsertBatch = async (cardBatch: CardFromFile[], prisma: PrismaClient) : Promise<UpsertBatchResult> => {
   let numberInserted = 0;
@@ -79,7 +114,7 @@ const upsertBatch = async (cardBatch: CardFromFile[], prisma: PrismaClient) : Pr
     where: {
       scryfall_id: {
         in: ids
-      }
+      },
     }
   });
   const existingCardIds = existingCards.map(card => card.scryfall_id);
@@ -185,14 +220,27 @@ async function simpleMigrate(prisma: PrismaClient): Promise<MigrateResult> {
   const streamPipeline = chain([
     createReadStream(filePath),
     StreamArray.withParser(),
-    new Batch({batchSize: 1000})  ]);
+    new Batch({batchSize: 10})  ]);
   
   let done = false;
   let batchCount = 0;
   const results: UpsertBatchResult[] = [];
+  const inserts = [];
+  const updates = [];
+  let dataArray: CardFromFile[] = [];
   
   streamPipeline.on('data', data => {
     console.log('Batch size:', data.length);
+    dataArray = data as CardFromFile[];
+    streamPipeline.destroy();
+    const cardsThatNeedUpdates = findChangedCards(data as CardFromFile[], prisma).then(
+      data => {
+        console.log(data.ids.length);
+        console.dir(data.ids);
+        return data;
+      }
+    )
+    /*
     if (data.length > 0) {
       upsertBatch(data as CardFromFile[], prisma)
         .then((result: UpsertBatchResult) => {
@@ -206,9 +254,10 @@ async function simpleMigrate(prisma: PrismaClient): Promise<MigrateResult> {
           console.error('Error in upsertBatch:', err);
           streamPipeline.pause();
         });
-      }
+      }*/
   });
   streamPipeline.on('end', () => {done=true; console.log('done');});
+  // await upsertBatch(dataArray, prisma);
 
   while (!done) {
     await new Promise(resolve => setTimeout(resolve, 1000));
