@@ -8,7 +8,6 @@ const admins = [
 
 const App = () => {
   const { data: sessionData } = useSession();
-  const stream = api.migration.runStreamMigration.useQuery("", {enabled: false});
   const bulk = api.migration.runSimpleMigration.useQuery("", {enabled: false});
   
   if (!sessionData) {
@@ -24,8 +23,6 @@ const App = () => {
       <div className="container mx-auto p-4">
         <div>
           <h2 className="text-xl">Refresh Database</h2>
-          <button onClick={() => {void stream.refetch()}}>Download latest data to db</button>
-          <br/>
           <button onClick={() => {void bulk.refetch()}}>Import downloaded data to Cards table</button>
         </div>
       </div>

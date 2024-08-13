@@ -69,7 +69,8 @@ interface UpsertBatchResult {
 }
 
 interface CardsThatNeedUpdates {
-  ids: string[];
+  cardsToUpdate: CardFromFile[];
+  cardsToCreate: CardFromFile[];
 }
 
 const findChangedCards = async (cardBatch: CardFromFile[], prisma: PrismaClient) : Promise<CardsThatNeedUpdates> => {
@@ -97,38 +98,52 @@ const findChangedCards = async (cardBatch: CardFromFile[], prisma: PrismaClient)
   const existingCards = await prisma.$queryRawUnsafe<{ scryfall_id: string }[]>(query);
   console.dir(existingCards);
 
-  return {
-    ids: existingCards.map(card => card.scryfall_id),
-  };
-}
-
-
-const upsertBatch = async (cardBatch: CardFromFile[], prisma: PrismaClient) : Promise<UpsertBatchResult> => {
-  let numberInserted = 0;
-  let numberUpdated = 0;
   const ids = cardBatch.map(card => card.value.id);
   const cardBatchMap = new Map<string, CardData>();
   cardBatch.forEach(card => cardBatchMap.set(card.value.id, card.value));
 
-  const existingCards = await prisma.card.findMany({
+  const cardsFound = await prisma.card.findMany({
     where: {
       scryfall_id: {
         in: ids
       },
     }
   });
-  const existingCardIds = existingCards.map(card => card.scryfall_id);
-  const cardsNeedUpdate = existingCards.filter(card => card.hash !== hashJsonString(JSON.stringify(cardBatchMap.get(card.scryfall_id))));
-  const newCount = cardBatch.length - existingCardIds.length;
-  const updateCount = cardsNeedUpdate.length;;
-  if (newCount > 0 || updateCount > 0) {
-    console.log(`Inserting ${cardBatch.length - existingCardIds.length} new cards and updating ${cardsNeedUpdate.length} existing cards`);
-  } else {
-    console.log("No changes to update for this batch");
-  }
-  const cardsToInsert = cardBatch.filter(card => !existingCardIds.includes(card.value.id));
+
+  const missingCards = cardBatch.filter(card => !cardsFound.map(card => card.scryfall_id).includes(card.value.id));
+  const upsertCards = cardBatch.filter(card => existingCards.map(card => card.scryfall_id).includes(card.value.id));
+
+  return {
+    cardsToUpdate: upsertCards,
+    cardsToCreate: missingCards
+  };
+}
+
+const updateBatch = async (cardBatch: CardFromFile[], prisma: PrismaClient) : Promise<number> => {
+  const updates = [];
+  for (const card of cardBatch) {
+    const cardData = card.value;
+    updates.push(prisma.card.update({
+          where: {
+            scryfall_id: cardData.id
+          },
+          data: {
+            name: cardData.name,
+            layout: cardData.layout,
+            image_status: cardData.image_status,
+            image_uris: cardData.image_uris,
+            scryfall_uri: cardData.scryfall_uri,
+            hash: hashJsonString(JSON.stringify(cardData))
+          }
+        }));
+    }
+  const updated = await prisma.$transaction(updates);
+  return updated.length;
+}
+
+const createBatch = async (cardBatch: CardFromFile[], prisma: PrismaClient) : Promise<number> => {
   const created = await prisma.card.createMany({
-    data: cardsToInsert.map(card => ({
+    data: cardBatch.map(card => ({
       name: card.value.name,
       scryfall_id: card.value.id,
       layout: card.value.layout,
@@ -138,35 +153,7 @@ const upsertBatch = async (cardBatch: CardFromFile[], prisma: PrismaClient) : Pr
       hash: hashJsonString(JSON.stringify(card.value))
     }))
   });
-  numberInserted = created.count;
-  const updates = [];
-  for (const card of cardsNeedUpdate) {
-    const updatedCard = cardBatchMap.get(card.scryfall_id);
-    if (updatedCard === undefined) {
-      console.error(`Failed to find updated card for id ${card.scryfall_id}`);
-      continue;
-    }
-    updates.push(prisma.card.update({
-          where: {
-            scryfall_id: card.scryfall_id
-          },
-          data: {
-            name: updatedCard.name,
-            layout: updatedCard.layout,
-            image_status: updatedCard.image_status,
-            image_uris: updatedCard.image_uris,
-            scryfall_uri: updatedCard.scryfall_uri,
-            hash: hashJsonString(JSON.stringify(updatedCard))
-          }
-        }));
-    }
-  const updated = await prisma.$transaction(updates);
-  numberUpdated = updated.length;
-  return {
-    numberInserted,
-    numberUpdated,
-    numberSkipped: cardBatch.length - numberInserted - numberUpdated
-  };
+  return created.count;
 }
 
 function hashString(str: string): number {
@@ -220,44 +207,37 @@ async function simpleMigrate(prisma: PrismaClient): Promise<MigrateResult> {
   const streamPipeline = chain([
     createReadStream(filePath),
     StreamArray.withParser(),
-    new Batch({batchSize: 10})  ]);
+    new Batch({batchSize: 50})  ]);
   
   let done = false;
-  let batchCount = 0;
   const results: UpsertBatchResult[] = [];
-  const inserts = [];
-  const updates = [];
-  let dataArray: CardFromFile[] = [];
   
   streamPipeline.on('data', data => {
     console.log('Batch size:', data.length);
-    dataArray = data as CardFromFile[];
-    streamPipeline.destroy();
-    const cardsThatNeedUpdates = findChangedCards(data as CardFromFile[], prisma).then(
-      data => {
-        console.log(data.ids.length);
-        console.dir(data.ids);
-        return data;
-      }
-    )
-    /*
-    if (data.length > 0) {
-      upsertBatch(data as CardFromFile[], prisma)
-        .then((result: UpsertBatchResult) => {
-          batchCount += 1;
-          results.push(result);
-          console.log(`Done upserting batch ${batchCount}`);
-          // streamPipeline.destroy();
-          
+    findChangedCards(data as CardFromFile[], prisma).then(
+      staged => {
+        Promise.all([
+          updateBatch(staged.cardsToUpdate, prisma),
+          createBatch(staged.cardsToCreate, prisma)
+        ]).then(([updateResult, createResult]) => {
+          results.push({
+            numberInserted: createResult,
+            numberUpdated: updateResult,
+            numberSkipped: data.length - createResult - updateResult
+          });
+          // streamPipeline.resume();
         })
         .catch(err => {
           console.error('Error in upsertBatch:', err);
           streamPipeline.pause();
         });
-      }*/
+      }
+    ).catch(err => {
+      console.error('Error in findChangedCards:', err);
+      streamPipeline.pause();
+    });
   });
   streamPipeline.on('end', () => {done=true; console.log('done');});
-  // await upsertBatch(dataArray, prisma);
 
   while (!done) {
     await new Promise(resolve => setTimeout(resolve, 1000));
