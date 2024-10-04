@@ -26,7 +26,7 @@ if download_uri_response.status_code == requests.codes.ok:
     print(f"{download_uri_response.status_code}: {download_uri}")
 
 if have_download_uri:
-    filename = f"default-cards-{datetime.today().strftime('%Y-%m-%d')}.json"
+    filename = f"default_cards_{datetime.today().strftime('%Y_%m_%d')}.json"
 
     # I don't want to keep the large files around (~500Mb)
     # TODO: add to a log, and just check log for successful downloads
