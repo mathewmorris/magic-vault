@@ -2,6 +2,12 @@ from datetime import datetime, timedelta
 import json
 import time
 from deepdiff import DeepDiff
+import logging
+import logging.config
+
+logging.config.fileConfig('logger.conf')
+
+logger = logging.getLogger('card_differ')
 
 # TODO:
 ##################################################################
@@ -15,8 +21,7 @@ today = datetime.today()
 yesterday = today - timedelta(days=1)
 oldFilename = f"default_cards_{yesterday.strftime('%Y_%m_%d')}.json"
 newFilename = f"default_cards_{today.strftime('%Y_%m_%d')}.json"
-print(oldFilename)
-print(newFilename)
+logger.info(f"Starting to diff {oldFilename} and {newFilename}")
 
 changed_cards = []
 removed_cards = []
@@ -29,12 +34,23 @@ with open(oldFilename, 'r') as f:
 with open(newFilename, 'r') as f:
     newData = json.load(f)
 
-print(f"oldData: {len(oldData)} cards")
-print(f"newData: {len(newData)} cards")
+logger.info(f"oldData: {len(oldData)} cards")
+logger.info(f"newData: {len(newData)} cards")
 
-diff = DeepDiff(newData, oldData)
+diff = DeepDiff(
+    newData,
+    oldData,
+    group_by='id',
+    # verbose_level=2
+)
 
-print(diff)
+logger.info(f"Differences:\n{diff}")
+
+changes = {}
+for i in diff.keys():
+    changes[i] = len(diff[i])
+
+logger.info(f"Changes Counts:\n{changes}")
 
 # Save newest data dump
 
