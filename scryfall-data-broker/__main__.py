@@ -22,6 +22,12 @@ import requests
 
 logging.config.fileConfig('logger.conf')
 logger = logging.getLogger('card_differ')
+formatter = logging.Formatter(
+    '%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+fh = logging.FileHandler('main.log')
+fh.setLevel(logging.DEBUG)
+fh.setFormatter(formatter)
+logger.addHandler(fh)
 
 ###################################################
 # Gather bulk data from Scryfall
@@ -115,6 +121,10 @@ events = DeepDiff(
     group_by='id',
     verbose_level=2
 )
+
+logger.info(events)
+
+raise Exception('Need to observe information to know how to handle changes')
 
 
 def identifyAction(action, event_id):
