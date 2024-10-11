@@ -11,6 +11,7 @@
 
 # Fetch Scryfall Data
 # `python get_bulk_data_json_file.py`
+import sys
 import os
 import logging.config
 import logging
@@ -24,7 +25,7 @@ logging.config.fileConfig('logger.conf')
 logger = logging.getLogger('card_differ')
 formatter = logging.Formatter(
     '%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-fh = logging.FileHandler('main.log')
+fh = logging.FileHandler('logs/main.log')
 fh.setLevel(logging.DEBUG)
 fh.setFormatter(formatter)
 logger.addHandler(fh)
@@ -50,7 +51,7 @@ if download_uri_response.status_code == requests.codes.ok:
         f"{download_uri_response.status_code}: {download_uri_response}")
     # parse json and get download_uri
     download_uri = download_uri_response.json()['download_uri']
-    file_name = f"default_cards_{datetime.today().strftime('%Y_%m_%d')}.json"
+    file_name = f"scryfall_downloads/default_cards_{datetime.today().strftime('%Y_%m_%d')}.json"
 
     if os.path.exists(file_name):
         logger.warning(f"File exists, skipping download. \
@@ -80,7 +81,7 @@ yesterday = today - timedelta(days=1)
 
 
 def build_file_name_with_date(date):
-    return f"default_cards_{date.strftime('%Y_%m_%d')}.json"
+    return f"scryfall_downloads/default_cards_{date.strftime('%Y_%m_%d')}.json"
 
 
 old_file_name = build_file_name_with_date(yesterday)
@@ -122,9 +123,14 @@ events = DeepDiff(
     verbose_level=2
 )
 
-logger.info(events)
+with open(f"events/events_{datetime.today().strftime('%Y_%m_%d')}.json", 'w') as f:
+    f.write(events.to_json())
 
-raise Exception('Need to observe information to know how to handle changes')
+logger.info(events.to_dict())
+
+logger.info("Events logged to '%s'.",
+            f"events/events_{datetime.today().strftime('%Y_%m_%d')}.json")
+sys.exit()
 
 
 def identifyAction(action, event_id):

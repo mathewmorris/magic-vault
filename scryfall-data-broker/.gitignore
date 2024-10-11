@@ -1,3 +1,5 @@
 env/
-*cards*.json
-*.log
+scryfall_downloads/
+events/
+logs/
+
