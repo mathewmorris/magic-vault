@@ -6,7 +6,10 @@ Right now we're only grabbing Default Cards
 
 
 How long does it take? TBD
-How does it work?
+## How does it work?
+- grab download url from scryfall
+- use url to download latest data dump
+- log diff between current and newest data files
 
 Fetch Scryfall Data
 `python get_bulk_data_json_file.py`
@@ -16,4 +19,7 @@ Diff old set and new set, create file that notes changes
 
 Update database & log changes made
 `python db_updater.py`
+
+## Crontab
+```20 16 * * *```
 
