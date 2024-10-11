@@ -117,8 +117,8 @@ logger.info(f"Starting to diff {old_file_name} and {file_name}")
 
 
 events = DeepDiff(
-    newData[:25],
-    oldData[:25],
+    newData,
+    oldData,
     group_by='id',
     verbose_level=2
 )
