@@ -1,5 +1,3 @@
-import type { Prisma, Card } from "@prisma/client";
-import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
 import {
@@ -7,64 +5,43 @@ import {
     publicProcedure,
 } from "~/server/api/trpc";
 
-interface ScryfallSearchResponse {
-    object: string;
-    total_cards: number;
-    has_more: boolean;
-    data: Card[];
-}
-
 export const cardRouter = createTRPCRouter({
     search: publicProcedure
-    .input(z.string().min(1))
-    .query(async ({ ctx, input }) => {
-        // TODO: Create a searchRouter that will save results of search calls to scryfallAPI
-        // will use to see if search in db returns same number of results
-        const matches = await ctx.prisma.card.findMany({
-            where: {
-                name: {
-                    contains: input,
-                }
+        .meta({ description: "Searching for card based on name alone.", })
+        .input(
+            z.object({
+                name: z.string().min(1).describe('The name you are looking for.'),
+                limit: z.number().min(1).max(100).nullish(),
+                cursor: z.string().nullish(),
+            }),
+        )
+        .query(async (opts) => {
+            const { input, ctx } = opts;
+
+            const limit = input.limit ?? 50;
+            const { cursor, name } = input;
+            const items = await ctx.prisma.card.findMany({
+                take: limit + 1, // get an extra item at the end which we'll use as next cursor
+                where: {
+                    name: {
+                        contains: name,
+                        mode: 'insensitive',
+                    },
+                },
+                cursor: cursor ? { id: cursor } : undefined,
+                orderBy: {
+                    id: 'asc',
+                },
+            });
+            let nextCursor: typeof cursor | undefined = undefined;
+            if (items.length > limit) {
+                const nextItem = items.pop();
+                nextCursor = nextItem!.id;
             }
-        });
-
-        console.log('matches: ', matches);
-        const scryfallSearch = await fetch(`https://api.scryfall.com/cards/search?q=${input}`);
-
-        if (!scryfallSearch.ok) {
-            throw new TRPCError({
-                code: 'INTERNAL_SERVER_ERROR',
-                message: 'Something went wrong when trying to search the Scryfall API.',
-                cause: scryfallSearch.statusText,
-            })
-        }
-
-        const scryfallResult = await scryfallSearch.json() as ScryfallSearchResponse;
-        const newCards = scryfallResult.data.filter(card => {
-            const matchesIds = matches.map(match => match.scryfall_id);
-            return !matchesIds.includes(card.id);
-        });
-        console.log('newCards; ', newCards);
-        await ctx.prisma.card.createMany({
-            data: newCards.map((card) => {
-              const all_parts = card.all_parts as Prisma.JsonObject;
-              const card_faces = card.card_faces as Prisma.JsonObject;
-              const image_uris = card.image_uris as Prisma.JsonObject;
-
-              return {
-                scryfall_id: card.id,
-                scryfall_uri: card.scryfall_uri,
-                name: card.name,
-                layout: card.layout,
-                image_status: card.image_status,
-                all_parts,
-                card_faces,
-                image_uris,
-            }}),
-            skipDuplicates: true,
-        });
-
-        return scryfallResult.data;
-    }),
+            return {
+                items,
+                nextCursor,
+            };
+        }),
 });
 
