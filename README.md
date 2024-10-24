@@ -28,3 +28,10 @@
 
 The app should be exposed at `localhost:3000` ready for development.
 
+## What happens when I push a new branch to Github?
+    1. Vercel [creates a Preview deployment](https://vercel.com/magicians/magic-vault/deployments)
+
+## What happens when I merge into `main`?
+    1. Vercel [creates a Production deployment](https://vercel.com/magicians/magic-vault/deployments)
+    2. Database migrations are run automatically with github action `deploy`.
+

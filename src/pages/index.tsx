@@ -3,7 +3,7 @@ import SearchBar from "~/components/SearchBar";
 
 const App = () => {
   const { data: sessionData } = useSession();
-  
+
   if (!sessionData) {
     return (
       <div className="container mx-auto grid justify-items-stretch">
@@ -13,10 +13,10 @@ const App = () => {
   }
 
   return (
-      <div className="container mx-auto p-4">
-        <div>
-          <h2 className="text-xl">Look for a card</h2>
-          <SearchBar />
+    <div className="container mx-auto p-4">
+      <div>
+        <h2 className="text-xl">Look for a card</h2>
+        <SearchBar />
       </div>
     </div>
   );

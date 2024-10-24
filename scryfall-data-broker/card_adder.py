@@ -26,8 +26,8 @@ class DecimalEncoder(json.JSONEncoder):
 
 def process_card(card):
     data = {
+        'id': card['id'],
         'name': card['name'],
-        'scryfall_id': card['id'],
         'scryfall_uri': card['scryfall_uri'],
         'image_status': card['image_status'],
         'image_uris': card['image_uris'],
