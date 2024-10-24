@@ -9,9 +9,8 @@ datasource db {
 }
 
 model Card {
-  id              String  @id @default(cuid())
+  id              String  @id
   name            String  
-  scryfall_id     String  @unique
   scryfall_uri    String  
   image_status    String  
   image_uris      Json?   @db.JsonB
