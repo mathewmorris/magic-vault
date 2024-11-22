@@ -19,7 +19,6 @@ const CollectionList = ({ collections }: { collections: Collection[] }) => {
   return (collections.map(collection => (
     <div key={collection.id}>
       <span>{collection.name}</span>
-      {collection.cards?.map(card => <p key={card}>{card}</p>)}
       <Link href={`/collection/${collection.id}`}>View Collection</Link>
     </div>
   )))
