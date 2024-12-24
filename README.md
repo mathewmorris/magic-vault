@@ -3,12 +3,18 @@
 
 ## Features
 - [x] Search for any card
-- [ ] Create collections
+- [x] Create collections
+- [ ] Update collections
+- [ ] Delete collections
 - [ ] See value of your collections (updated daily)
 - [x] Login with google, discord, or github
 
 ## Stack
 - This is a [T3 Stack](https://create.t3.gg/) project bootstrapped with `create-t3-app`.
+- Next.js
+- tRPC
+- Prisma
+- Tailwind CSS
 - Postgres
 
 ## Local Development
