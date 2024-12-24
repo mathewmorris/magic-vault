@@ -11,10 +11,12 @@ export default function Page() {
     <div>
       <h1>{collection.data?.name}</h1>
       {cards.data?.map(card => {
+        const images = card.image_uris as { small: string } | null;
+
         return (
           <div key={card.id}>
             <p>{card.name}</p>
-            <Image src={card.image_uris?.normal ?? ""} width={100} height={200} />
+            <Image src={images?.small ?? ""} width={100} height={200} alt={card.name} />
           </div>
         )
       })}

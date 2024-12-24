@@ -11,7 +11,7 @@ export default function CreateCollectionPage() {
 
   const { mutate: collectionMutation } = api.collection.create.useMutation({
     onSuccess: newCollection => {
-      router.replace(`/collections/${newCollection.id}`)
+      void router.replace(`/collections/${newCollection.id}`)
     }
   });
 

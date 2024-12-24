@@ -1,4 +1,6 @@
-export default function Button({ children, ...props }) {
+type ButtonProps = Omit<React.ButtonHTMLAttributes<HTMLButtonElement>, 'className'>
+
+export default function Button({ children, ...props }: ButtonProps) {
   return (
     <button
       className="
