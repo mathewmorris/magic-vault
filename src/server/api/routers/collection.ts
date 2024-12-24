@@ -17,12 +17,13 @@ export const collectionRouter = createTRPCRouter({
         }
       });
     }),
-  create: protectedProcedure.input(z.object({ name: z.string() }))
+  create: protectedProcedure.input(z.object({ name: z.string(), cards: z.string().array() }))
     .mutation(async ({ ctx, input }) => {
 
       const collection = await ctx.prisma.collection.create({
         data: {
           name: input.name,
+          cards: input.cards,
           user: {
             connect: {
               id: ctx.session.user.id
