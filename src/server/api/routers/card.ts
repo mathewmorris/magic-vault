@@ -6,6 +6,15 @@ import {
 } from "~/server/api/trpc";
 
 export const cardRouter = createTRPCRouter({
+    findMany: publicProcedure.input(z.object({ cardIds: z.string().array() })).query(async ({ ctx, input }) => {
+        const cards = await ctx.prisma.card.findMany({
+            where: {
+                id: { in: input.cardIds },
+            }
+        })
+
+        return cards;
+    }),
     search: publicProcedure
         .meta({ description: "Searching for card based on name alone.", })
         .input(
