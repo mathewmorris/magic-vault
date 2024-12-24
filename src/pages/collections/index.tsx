@@ -14,7 +14,7 @@ const CollectionList = ({ collections }: { collections: Collection[] }) => {
   return (collections.map(collection => (
     <div key={collection.id}>
       <span>{collection.name}</span>
-      <Link href={`/collections/${collection.id}`}>View Collection</Link>
+      <Link href={`/collection/${collection.id}`}>View Collection</Link>
     </div>
   )))
 }
@@ -24,7 +24,7 @@ export default function CollectionsIndex() {
 
   return (
     <div>
-      <Link href="collections/create">Create Collection</Link>
+      <Link href="collection/create">Create Collection</Link>
       <p>Your collections</p>
       <CollectionList collections={collections ?? []} />
     </div>
