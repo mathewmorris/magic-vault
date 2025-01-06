@@ -11,19 +11,22 @@ describe("verifyCollectionOwnership", () => {
   });
 
   test("should return the collection if ownership is verified", async () => {
-    prismaMock.collection.findUnique.mockResolvedValue({
+    const dateNow = new Date();
+    const collection = {
       id: collectionId,
       name: "Collection",
       cards: [],
       userId,
-      updatedAt: new Date(),
-      createdAt: new Date(),
+      updatedAt: dateNow,
+      createdAt: dateNow,
       deletedAt: null,
-    });
+    }
+
+    prismaMock.collection.findUnique.mockResolvedValue(collection);
 
     const result = await verifyCollectionOwnership(prismaMock, userId, collectionId);
 
-    expect(result).toEqual({ id: collectionId, userId });
+    expect(result).toEqual(collection);
     expect(prismaMock.collection.findUnique).toHaveBeenCalledWith({
       where: { id: collectionId },
     });
@@ -34,7 +37,7 @@ describe("verifyCollectionOwnership", () => {
 
     await expect(
       verifyCollectionOwnership(prismaMock, userId, collectionId)
-    ).rejects.toThrowError(new TRPCError({ code: "NOT_FOUND" }));
+    ).rejects.toThrowError(new TRPCError({ code: "NOT_FOUND", message: "Collection not found" }));
 
     expect(prismaMock.collection.findUnique).toHaveBeenCalledWith({
       where: { id: collectionId },
