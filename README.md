@@ -31,9 +31,21 @@
         npx vercel env pull
     ```
 
-- run `docker compose up -d`
+- run application using docker
+    ```bash
+        npm run dev:docker
+    ```
 
-The app should be exposed at `localhost:3000` ready for development.
+The frontend next application will be ready for connections at `localhost:3000`.
+The postgres database will be ready for connections at `localhost:5432`.
+
+## Some important scripts
+
+|command|description|
+|-|-|
+|`npm run rebuild-frontend`|Will rebuild the next application and start it up without triggering a database rebuild|
+|`npm run dev:docker`|starts dev environment via docker|
+|`npm run dev:logs`|starts reading docker compose log files for application container|
 
 ## What happens when I push a new branch to Github?
     1. Vercel [creates a Preview deployment](https://vercel.com/magicians/magic-vault/deployments)
