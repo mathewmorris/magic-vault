@@ -47,10 +47,32 @@ The postgres database will be ready for connections at `localhost:5432`.
 |`npm run dev:docker`|starts dev environment via docker|
 |`npm run dev:logs`|starts reading docker compose log files for application container|
 
-## What happens when I push a new branch to Github?
+## Process
+
+### What happens when I push a new branch to Github?
     1. Vercel [creates a Preview deployment](https://vercel.com/magicians/magic-vault/deployments)
 
-## What happens when I merge into `main`?
+### What happens when I merge into `main`?
     1. Vercel [creates a Production deployment](https://vercel.com/magicians/magic-vault/deployments)
     2. Database migrations are run automatically with github action `deploy`.
+
+## Document Coding Patterns
+> Practicing documenting coding patterns is important. [This video](https://youtu.be/oJbfMBROEO0?si=QL0Xty-Q2nVlaiZo&t=311) speaks on this a little bit
+
+### General rules
+- colocate test file (e.g. Component.ts should exist alongside Component.test.ts)
+- follow [Arrage-Act-Assert](https://automationpanda.com/2020/07/07/arrange-act-assert-a-pattern-for-writing-good-tests/) when writing tests
+
+### Testing Asynchronous Code
+```ts
+    // Resolving
+    return expect(
+      doSomething();
+    ).resolves.toStrictEqual(expectedResult);
+
+    // Rejecting
+    return expect(
+      doSomething();
+    ).rejects.toStrictEqual(expectedError);
+```
 

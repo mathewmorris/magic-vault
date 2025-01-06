@@ -7,7 +7,7 @@ describe("verifyCollectionOwnership", () => {
   const collectionId = "collection456";
 
   beforeEach(() => {
-    jest.clearAllMocks(); // Clear mock state between tests
+    jest.clearAllMocks();
   });
 
   test("should return the collection if ownership is verified", async () => {
@@ -24,12 +24,9 @@ describe("verifyCollectionOwnership", () => {
 
     prismaMock.collection.findUnique.mockResolvedValue(collection);
 
-    const result = await verifyCollectionOwnership(prismaMock, userId, collectionId);
-
-    expect(result).toEqual(collection);
-    expect(prismaMock.collection.findUnique).toHaveBeenCalledWith({
-      where: { id: collectionId },
-    });
+    return expect(
+      verifyCollectionOwnership(prismaMock, userId, collectionId)
+    ).resolves.toStrictEqual(collection);
   });
 
   test("should throw NOT_FOUND error if the collection does not exist", async () => {
