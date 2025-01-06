@@ -3,6 +3,7 @@ import {
   createTRPCRouter,
   protectedProcedure,
 } from "~/server/api/trpc";
+import { verifyCollectionOwnership } from "../util/verifyCollectionOwnership";
 
 export const collectionRouter = createTRPCRouter({
   getAll: protectedProcedure.query(({ ctx }) => {
@@ -47,6 +48,19 @@ export const collectionRouter = createTRPCRouter({
       })
 
       return collection;
+    }),
+  softDelete: protectedProcedure.input(z.object({ collectionId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const collection = await verifyCollectionOwnership(ctx.prisma, ctx.session.user.id, input.collectionId)
+
+      return await ctx.prisma.collection.update({
+        where: {
+          id: collection.id,
+        },
+        data: {
+          deletedAt: new Date(),
+        }
+      })
     }),
 });
 
