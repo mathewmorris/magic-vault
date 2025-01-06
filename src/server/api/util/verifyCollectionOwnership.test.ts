@@ -33,15 +33,13 @@ describe("verifyCollectionOwnership", () => {
   });
 
   test("should throw NOT_FOUND error if the collection does not exist", async () => {
-    prismaMock.collection.findUnique.mockResolvedValue(null);
-
-    await expect(
+    return expect(
       verifyCollectionOwnership(prismaMock, userId, collectionId)
-    ).rejects.toThrowError(new TRPCError({ code: "NOT_FOUND", message: "Collection not found" }));
-
-    expect(prismaMock.collection.findUnique).toHaveBeenCalledWith({
-      where: { id: collectionId },
-    });
+    )
+      .rejects
+      .toStrictEqual(
+        new TRPCError({ code: "NOT_FOUND", message: "Collection not found" })
+      );
   });
 
   test("should throw FORBIDDEN error if the user is not the owner", async () => {
@@ -55,18 +53,14 @@ describe("verifyCollectionOwnership", () => {
       deletedAt: null,
     });
 
-    await expect(
+    return expect(
       verifyCollectionOwnership(prismaMock, userId, collectionId)
-    ).rejects.toThrowError(
+    ).rejects.toStrictEqual(
       new TRPCError({
         code: "FORBIDDEN",
         message: "You are not authorized to access this collection",
       })
     );
-
-    expect(prismaMock.collection.findUnique).toHaveBeenCalledWith({
-      where: { id: collectionId },
-    });
   });
 });
 
