@@ -76,3 +76,13 @@ The postgres database will be ready for connections at `localhost:5432`.
     ).rejects.toStrictEqual(expectedError);
 ```
 
+## Document Logic
+
+### `verifyCollectionOwnership` API utility
+- if single collection exists:
+    - if owner id matches session id:
+        - resolve with collection
+    - else:
+        - reject with FORBIDDEN
+- else, reject with NOT_FOUND
+
