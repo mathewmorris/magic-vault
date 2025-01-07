@@ -18,8 +18,7 @@
     "noUncheckedIndexedAccess": true,
     "baseUrl": ".",
     "paths": {
-      "~/*": ["./src/*"],
-      "singleton": ["./singleton.ts"]
+      "~/*": ["./src/*"]
     }
   },
   "include": [
