@@ -2,7 +2,7 @@ import prismaMock from "singleton";
 import { createInnerTRPCContext } from "../trpc";
 import { appRouter } from "../root";
 import { TRPCError } from "@trpc/server";
-import { Collection } from "@prisma/client";
+import { type Collection } from "@prisma/client";
 
 describe("collection procedures", () => {
     const userId = "user123";

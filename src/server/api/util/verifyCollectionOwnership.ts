@@ -1,5 +1,5 @@
 import { TRPCError } from "@trpc/server";
-import { prisma as prismaClient } from "~/server/db";
+import { type prisma as prismaClient } from "~/server/db";
 
 /**
  * Utility function to verify ownership of a collection.
