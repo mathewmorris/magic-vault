@@ -78,6 +78,21 @@ The postgres database will be ready for connections at `localhost:5432`.
 
 ## Document Logic
 
+### Collection soft-delete procedure
+- When a **collection is active**, it will not have a date in `deletedAt` field
+- When user wants to **delete a collection**, `softDelete` procedure will be executed
+- When user wants to **recover a collection**, `recoverCollection` procedure will be executed
+
+### `softDelete` procedure
+1. If `verifyCollectionOwnership` resolves:
+    - update collection `deletedAt` field to `new Date()`
+2. return collection
+
+### `recoverCollection` procedure
+1. If `verifyCollectionOwnership` resolves:
+    - update collection `deletedAt` field to `null`
+2. return collection
+
 ### `verifyCollectionOwnership` API utility
 - if single collection exists:
     - if owner id matches session id:
