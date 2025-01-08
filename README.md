@@ -82,6 +82,7 @@ The postgres database will be ready for connections at `localhost:5432`.
 - When a **collection is active**, it will not have a date in `deletedAt` field
 - When user wants to **delete a collection**, `softDelete` procedure will be executed
 - When user wants to **recover a collection**, `recoverCollection` procedure will be executed
+- Every day, a cronjob will hit the `api/collections/cleanup` endpoint which will execute `destroy30DaysOld`
 
 ### `softDelete` procedure
 1. If `verifyCollectionOwnership` resolves:
@@ -92,6 +93,11 @@ The postgres database will be ready for connections at `localhost:5432`.
 1. If `verifyCollectionOwnership` resolves:
     - update collection `deletedAt` field to `null`
 2. return collection
+
+### `destroy30DaysOld` procedure
+1. If collections exists that have `deletedAt` older than 30 days
+    - run deleteMany mutation with list of collectionIds
+2. return number of deleted collections
 
 ### `verifyCollectionOwnership` API utility
 - if single collection exists:
