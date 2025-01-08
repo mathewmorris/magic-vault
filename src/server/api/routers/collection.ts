@@ -1,9 +1,13 @@
 import { z } from "zod";
+import { sub } from 'date-fns/sub';
+import { isBefore } from 'date-fns/isBefore';
+
 import {
   createTRPCRouter,
+  cronProcedure,
   protectedProcedure,
 } from "~/server/api/trpc";
-import { verifyCollectionOwnership } from "../util/verifyCollectionOwnership";
+import { verifyCollectionOwnership } from "~/server/api/util";
 
 export const collectionRouter = createTRPCRouter({
   getAll: protectedProcedure.query(({ ctx }) => {
@@ -78,6 +82,37 @@ export const collectionRouter = createTRPCRouter({
           deletedAt: null,
         }
       })
-    })
+    }),
+  destroy30DaysOld: cronProcedure
+    .mutation(async ({ ctx }) => {
+      const thirtyDaysAgo = sub(new Date(), { days: 30 });
+      const softDeletedCollections = await ctx.prisma.collection.findMany({
+        where: {
+          deletedAt: {
+            not: null,
+          },
+        },
+      })
+
+      const readyToBeDeleted = softDeletedCollections.filter(({ deletedAt }) => {
+        return deletedAt != null && isBefore(deletedAt, thirtyDaysAgo);
+      })
+
+
+      if (readyToBeDeleted.length > 0) {
+        // attempt to delete list (if one doesn't exist, does query fail?)
+        const deleted = await ctx.prisma.collection.deleteMany({
+          where: {
+            id: {
+              in: readyToBeDeleted.map(collection => collection.id),
+            }
+          }
+        });
+
+        return deleted;
+      } else {
+        return { count: 0 };
+      }
+    }),
 });
 

@@ -3,17 +3,17 @@ import { createInnerTRPCContext } from "../trpc";
 import { appRouter } from "../root";
 import { TRPCError } from "@trpc/server";
 import { type Collection } from "@prisma/client";
+import { sub } from "date-fns/sub";
 
 describe("collection procedures", () => {
     const userId = "user123";
     const collectionId = "collection456";
     let activeCollection: Collection;
     let deletedCollection: Collection;
-    let dateNow: Date;
+    const dateNow = new Date();
 
     beforeEach(() => {
         jest.clearAllMocks();
-        dateNow = new Date();
         activeCollection = {
             id: collectionId,
             name: "Collection",
@@ -118,6 +118,58 @@ describe("collection procedures", () => {
             return expect(
                 caller.collection.recoverCollection({ collectionId })
             ).resolves.toStrictEqual(activeCollection);
+        });
+    });
+
+    describe("destroy30DaysOld", function() {
+        const fortyDaysAgo = sub(dateNow, { days: 40 });
+        const collectionIds = ["1", "2", "3", "4", "5", "6"];
+        let deletedCollections: Collection[];
+
+        beforeEach(() => {
+            deletedCollections = collectionIds.map(id => ({
+                ...deletedCollection,
+                id,
+                deletedAt: fortyDaysAgo,
+            }));
+        })
+
+        test("should delete list of collections given", async function() {
+            const session = {
+                user: { id: 'CRON_JOB' },
+                expires: "1",
+            };
+
+            const ctx = createInnerTRPCContext({ session });
+            const caller = appRouter.createCaller({ ...ctx, prisma: prismaMock });
+
+            prismaMock.collection.findMany.mockResolvedValueOnce(deletedCollections);
+            prismaMock.collection.deleteMany.mockResolvedValueOnce({ count: deletedCollections.length });
+
+            return expect(
+                caller.collection.destroy30DaysOld()
+            ).resolves.toStrictEqual({ count: deletedCollections.length });
+        });
+
+        test("should throw error when not admin or authorized bot", async function() {
+            const session = {
+                user: { id: userId, name: "John Doe" },
+                expires: "1",
+            }
+
+            const ctx = createInnerTRPCContext({ session });
+            const caller = appRouter.createCaller({ ...ctx, prisma: prismaMock });
+
+            prismaMock.collection.findMany.mockResolvedValueOnce(deletedCollections);
+            prismaMock.collection.deleteMany.mockResolvedValueOnce({ count: deletedCollections.length });
+
+            return expect(
+                caller.collection.destroy30DaysOld()
+            ).rejects.toStrictEqual(
+                new TRPCError({
+                    code: "UNAUTHORIZED"
+                })
+            );
         });
     });
 });
