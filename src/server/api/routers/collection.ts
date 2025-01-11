@@ -86,7 +86,8 @@ export const collectionRouter = createTRPCRouter({
         }
       })
     }),
-  recoverCollection: protectedProcedure.input(z.object({ collectionId: z.string() }))
+
+  recover: protectedProcedure.input(z.object({ collectionId: z.string() }))
     .mutation(async ({ ctx, input }) => {
       const collection = await verifyCollectionOwnership(ctx.prisma, ctx.session.user.id, input.collectionId)
 
@@ -99,6 +100,18 @@ export const collectionRouter = createTRPCRouter({
         }
       })
     }),
+
+  destroy: protectedProcedure.input(z.object({ collectionId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const collection = await verifyCollectionOwnership(ctx.prisma, ctx.session.user.id, input.collectionId)
+
+      return ctx.prisma.collection.delete({
+        where: {
+          id: collection.id,
+        }
+      })
+    }),
+
   destroy30DaysOld: cronProcedure
     .mutation(async ({ ctx }) => {
       const thirtyDaysAgo = sub(new Date(), { days: 30 });

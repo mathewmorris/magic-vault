@@ -7,12 +7,20 @@ export default function Page() {
   const router = useRouter()
   const { data: collection } = api.collection.byId.useQuery({ id: router.query.id as string })
   const cards = api.card.findMany.useQuery({ cardIds: collection?.cards ?? [] })
-  const { mutate: deleteCollection } = api.collection.softDelete.useMutation();
-  const { mutate: recoverCollection } = api.collection.recoverCollection.useMutation();
+  const { mutate: softDeleteCollection } = api.collection.softDelete.useMutation();
+  const { mutate: recoverCollection } = api.collection.recover.useMutation();
+  const { mutate: destroyCollection } = api.collection.destroy.useMutation();
 
   function onDeleteClick() {
     if (collection?.id) {
-      deleteCollection({ collectionId: collection?.id })
+      softDeleteCollection({ collectionId: collection?.id })
+      router.back();
+    }
+  }
+
+  function onDestroyClick() {
+    if (collection?.id) {
+      destroyCollection({ collectionId: collection?.id })
       router.back();
     }
   }
@@ -30,7 +38,10 @@ export default function Page() {
       {collection?.deletedAt == null ? (
         <Button type="button" onClick={onDeleteClick}>Delete</Button>
       ) : (
-        <Button type="button" onClick={onRecoverClick}>Recover</Button>
+        <>
+          <Button type="button" onClick={onRecoverClick}>Recover</Button>
+          <Button type="button" onClick={onDestroyClick}>Delete Permanently</Button>
+        </>
       )}
       {cards.data?.map(card => {
         const images = card.image_uris as { small: string } | null;

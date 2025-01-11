@@ -99,7 +99,7 @@ describe("collection procedures", () => {
             prismaMock.collection.findUnique.mockResolvedValueOnce(deletedCollection);
 
             return expect(
-                caller.collection.recoverCollection({ collectionId })
+                caller.collection.recover({ collectionId })
             ).rejects.toStrictEqual(new TRPCError({ code: "FORBIDDEN", message: "You are not authorized to access this collection" }));
         });
 
@@ -116,7 +116,7 @@ describe("collection procedures", () => {
             prismaMock.collection.update.mockResolvedValueOnce(activeCollection);
 
             return expect(
-                caller.collection.recoverCollection({ collectionId })
+                caller.collection.recover({ collectionId })
             ).resolves.toStrictEqual(activeCollection);
         });
     });
