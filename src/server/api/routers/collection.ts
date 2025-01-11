@@ -11,7 +11,23 @@ import { verifyCollectionOwnership } from "~/server/api/util";
 
 export const collectionRouter = createTRPCRouter({
   getAll: protectedProcedure.query(({ ctx }) => {
-    return ctx.prisma.collection.findMany();
+    return ctx.prisma.collection.findMany({
+      where: {
+        userId: ctx.session.user.id,
+        deletedAt: null,
+      }
+    });
+  }),
+
+  getDeletedCollections: protectedProcedure.query(async ({ ctx }) => {
+    return ctx.prisma.collection.findMany({
+      where: {
+        userId: ctx.session.user.id,
+        deletedAt: {
+          not: null
+        },
+      },
+    });
   }),
 
   byId: protectedProcedure
