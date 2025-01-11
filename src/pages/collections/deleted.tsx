@@ -11,11 +11,11 @@ export default function DeletedCollections({ }) {
       <h1 className="text-2xl">Deleted Collections</h1>
       {collections?.map(collection => {
         function onViewClick() {
-          router.push(`/collection/${collection.id}`);
+          void router.push(`/collection/${collection.id}`);
         }
 
         return (
-          <div>
+          <div key={collection.id}>
             <h4 className="text-lg">{collection.name}</h4>
             <Button type="button" onClick={onViewClick}>View Collection</Button>
           </div>
