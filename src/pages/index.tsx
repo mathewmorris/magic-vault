@@ -10,6 +10,7 @@ const App = () => {
       {sessionData && (
         <div>
           <Link href="/collections">Your Collections</Link>
+          <Link href="/collections/deleted">Your Deleted Collections</Link>
         </div>
       )}
     </div>

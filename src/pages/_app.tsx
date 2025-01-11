@@ -41,7 +41,9 @@ const MagicVault: AppType<{ session: Session | null }> = ({
             </div>
           </div>
         </nav>
-        <Component {...pageProps} />
+        <div className="container mx-auto py-8">
+          <Component {...pageProps} />
+        </div>
         <Analytics />
       </main>
     </SessionProvider>
