@@ -47,10 +47,63 @@ The postgres database will be ready for connections at `localhost:5432`.
 |`npm run dev:docker`|starts dev environment via docker|
 |`npm run dev:logs`|starts reading docker compose log files for application container|
 
-## What happens when I push a new branch to Github?
+## Process
+
+### What happens when I push a new branch to Github?
     1. Vercel [creates a Preview deployment](https://vercel.com/magicians/magic-vault/deployments)
 
-## What happens when I merge into `main`?
+### What happens when I merge into `main`?
     1. Vercel [creates a Production deployment](https://vercel.com/magicians/magic-vault/deployments)
     2. Database migrations are run automatically with github action `deploy`.
+
+## Document Coding Patterns
+> Practicing documenting coding patterns is important. [This video](https://youtu.be/oJbfMBROEO0?si=QL0Xty-Q2nVlaiZo&t=311) speaks on this a little bit
+
+### General rules
+- colocate test file (e.g. Component.ts should exist alongside Component.test.ts)
+- follow [Arrage-Act-Assert](https://automationpanda.com/2020/07/07/arrange-act-assert-a-pattern-for-writing-good-tests/) when writing tests
+
+### Testing Asynchronous Code
+```ts
+    // Resolving
+    return expect(
+      doSomething();
+    ).resolves.toStrictEqual(expectedResult);
+
+    // Rejecting
+    return expect(
+      doSomething();
+    ).rejects.toStrictEqual(expectedError);
+```
+
+## Document Logic
+
+### Collection soft-delete procedure
+- When a **collection is active**, it will not have a date in `deletedAt` field
+- When user wants to **delete a collection**, `softDelete` procedure will be executed
+- When user wants to **recover a collection**, `recoverCollection` procedure will be executed
+- Every day, a cronjob will hit the `api/collections/cleanup` endpoint which will execute `destroy30DaysOld`
+
+### `softDelete` procedure
+1. If `verifyCollectionOwnership` resolves:
+    - update collection `deletedAt` field to `new Date()`
+2. return collection
+
+### `recoverCollection` procedure
+1. If `verifyCollectionOwnership` resolves:
+    - update collection `deletedAt` field to `null`
+2. return collection
+
+### `destroy30DaysOld` procedure
+1. If collections exists that have `deletedAt` older than 30 days
+    - run deleteMany mutation with list of collectionIds
+2. return number of deleted collections
+
+### `verifyCollectionOwnership` API utility
+- if single collection exists:
+    - if owner id matches session id:
+        - resolve with collection
+    - else:
+        - reject with FORBIDDEN
+- else, reject with NOT_FOUND
 
