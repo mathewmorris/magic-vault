@@ -19,7 +19,7 @@ export const collectionRouter = createTRPCRouter({
     });
   }),
 
-  getDeletedCollections: protectedProcedure.query(async ({ ctx }) => {
+  getDeleted: protectedProcedure.query(async ({ ctx }) => {
     return ctx.prisma.collection.findMany({
       where: {
         userId: ctx.session.user.id,
@@ -58,19 +58,19 @@ export const collectionRouter = createTRPCRouter({
       return collection;
     }),
 
-  update: protectedProcedure.input(z.object({ id: z.string(), name: z.string().optional(), cards: z.string().array().optional() }))
+  update: protectedProcedure.input(z.object({ id: z.string(), newName: z.string().optional(), newCards: z.string().array().optional() }))
     .mutation(async ({ ctx, input }) => {
-      const collection = await ctx.prisma.collection.update({
+      const collection = await verifyCollectionOwnership(ctx.prisma, ctx.session.user.id, input.id)
+
+      return await ctx.prisma.collection.update({
         where: {
-          id: input.id,
+          id: collection.id,
         },
         data: {
-          name: input.name,
-          cards: input.cards,
+          name: input.newName,
+          cards: input.newCards,
         },
       })
-
-      return collection;
     }),
 
   softDelete: protectedProcedure.input(z.object({ collectionId: z.string() }))

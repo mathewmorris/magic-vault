@@ -51,6 +51,48 @@ describe("collection procedures", () => {
         });
     });
 
+    describe("getDeleted", function() {
+        test("should return all deleted collections", async () => {
+            const session = {
+                user: { id: userId, name: "John Doe" },
+                expires: "1",
+            }
+
+            const ctx = createInnerTRPCContext({ session });
+            const caller = appRouter.createCaller({ ...ctx, prisma: prismaMock });
+
+            prismaMock.collection.findMany.mockResolvedValue([deletedCollection]);
+
+            return expect(
+                caller.collection.getDeleted()
+            ).resolves.toStrictEqual([deletedCollection]);
+        });
+    })
+
+    describe("upudate", function() {
+        test("should update with new cards & name", async function() {
+            const session = {
+                user: { id: userId, name: "John Doe" },
+                expires: "1",
+            }
+
+            const ctx = createInnerTRPCContext({ session });
+            const caller = appRouter.createCaller({ ...ctx, prisma: prismaMock });
+            const updatedCollection = {
+                ...activeCollection,
+                name: "Updated Collection",
+                cards: ['newCardId']
+            }
+
+            prismaMock.collection.findUnique.mockResolvedValue(activeCollection);
+            prismaMock.collection.update.mockResolvedValue(updatedCollection);
+
+            return expect(
+                caller.collection.update(updatedCollection)
+            ).resolves.toStrictEqual(updatedCollection);
+        });
+    })
+
     describe("softDelete", function() {
         test("should set `deletedAt` to date", async () => {
             const session = {
@@ -86,7 +128,8 @@ describe("collection procedures", () => {
         });
 
     })
-    describe('recoverCollection', function() {
+
+    describe('recover', function() {
         test("should throw error when collection not owned", async function() {
             const session = {
                 user: { id: "notowner", name: "John Doe" },
