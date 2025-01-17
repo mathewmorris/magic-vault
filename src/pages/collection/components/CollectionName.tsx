@@ -1,7 +1,6 @@
 import { ChangeEvent, KeyboardEvent, useRef, useState } from "react";
 import Button from "~/components/Button";
 import { api } from "~/utils/api";
-import { motion } from "motion/react";
 
 type CollectionNameProps = {
   name: string,
