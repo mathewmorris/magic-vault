@@ -13,8 +13,6 @@ export function CollectionName({ name, onSave }: CollectionNameProps) {
   const [error, setError] = useState<string | null>();
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const ctx = api.useContext()
-
   function isValid(name: string) {
     if (name == '') {
       setError('Collection name cannot be empty')
@@ -28,7 +26,6 @@ export function CollectionName({ name, onSave }: CollectionNameProps) {
   async function save() {
     if (isValid(newName)) {
       onSave(newName)
-      ctx.collection.byId.invalidate()
       setIsEditing(false)
     }
   }

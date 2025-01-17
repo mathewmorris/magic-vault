@@ -1,66 +1,12 @@
 // Jest Snapshot v1, https://goo.gl/fbAQLP
 
-exports[`Collection Details Page should render correctly 1`] = `
+exports[`it should render correctly 1`] = `
 {
   "asFragment": [Function],
   "baseElement": <body>
-    <div>
-      <div>
-        <div
-          class="flex justify-between"
-        >
-          <h1
-            class="text-xl flex-1 visible"
-          />
-          <input
-            aria-hidden="true"
-            aria-label="collection name"
-            class="text-black mr-8 flex-1 hidden"
-            id="collectionName"
-            type="text"
-            value=""
-          />
-          <button
-            class=" rounded-full dark:bg-purple-950 px-4 py-2 font-semibold no-underline transition dark:hover:bg-pink-800 dark:focus:bg-pink-800 dark:hover:drop-shadow-glow dark:focus:drop-shadow-glow "
-            type="button"
-          >
-            Edit
-          </button>
-        </div>
-        <div>
-          No cards
-        </div>
-      </div>
-    </div>
+    <div />
   </body>,
-  "container": <div>
-    <div>
-      <div
-        class="flex justify-between"
-      >
-        <h1
-          class="text-xl flex-1 visible"
-        />
-        <input
-          aria-hidden="true"
-          aria-label="collection name"
-          class="text-black mr-8 flex-1 hidden"
-          id="collectionName"
-          type="text"
-          value=""
-        />
-        <button
-          class=" rounded-full dark:bg-purple-950 px-4 py-2 font-semibold no-underline transition dark:hover:bg-pink-800 dark:focus:bg-pink-800 dark:hover:drop-shadow-glow dark:focus:drop-shadow-glow "
-          type="button"
-        >
-          Edit
-        </button>
-      </div>
-      <div>
-        No cards
-      </div>
-    </div>
-  </div>,
+  "container": <div />,
   "debug": [Function],
   "findAllByAltText": [Function],
   "findAllByDisplayValue": [Function],

@@ -3,6 +3,7 @@ type ButtonProps = Omit<React.ButtonHTMLAttributes<HTMLButtonElement>, 'classNam
 export default function Button({ children, ...props }: ButtonProps) {
   return (
     <button
+      type="button"
       className="
         rounded-full
         dark:bg-purple-950
