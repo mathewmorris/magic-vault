@@ -75,20 +75,16 @@ exports[`should render correctly 1`] = `
   "baseElement": <body>
     <div>
       <div
-        class="p-4"
+        class="flex justify-between"
       >
-        <button
-          class=" rounded-full dark:bg-purple-950 px-4 py-2 font-semibold no-underline transition dark:hover:bg-pink-800 dark:focus:bg-pink-800 dark:hover:drop-shadow-glow dark:focus:drop-shadow-glow "
-          type="button"
-        >
-          Add new card
-        </button>
-        <div
-          class="flex justify-between"
-        >
+        <div>
           <p>
             Forest
           </p>
+        </div>
+        <div
+          class="flex items-center gap-4"
+        >
           <p>
             1
           </p>
@@ -96,13 +92,13 @@ exports[`should render correctly 1`] = `
             class=" rounded-full dark:bg-purple-950 px-4 py-2 font-semibold no-underline transition dark:hover:bg-pink-800 dark:focus:bg-pink-800 dark:hover:drop-shadow-glow dark:focus:drop-shadow-glow "
             type="button"
           >
-            +1
+            Delete
           </button>
           <button
             class=" rounded-full dark:bg-purple-950 px-4 py-2 font-semibold no-underline transition dark:hover:bg-pink-800 dark:focus:bg-pink-800 dark:hover:drop-shadow-glow dark:focus:drop-shadow-glow "
             type="button"
           >
-            Delete
+            +1
           </button>
         </div>
       </div>
@@ -110,20 +106,16 @@ exports[`should render correctly 1`] = `
   </body>,
   "container": <div>
     <div
-      class="p-4"
+      class="flex justify-between"
     >
-      <button
-        class=" rounded-full dark:bg-purple-950 px-4 py-2 font-semibold no-underline transition dark:hover:bg-pink-800 dark:focus:bg-pink-800 dark:hover:drop-shadow-glow dark:focus:drop-shadow-glow "
-        type="button"
-      >
-        Add new card
-      </button>
-      <div
-        class="flex justify-between"
-      >
+      <div>
         <p>
           Forest
         </p>
+      </div>
+      <div
+        class="flex items-center gap-4"
+      >
         <p>
           1
         </p>
@@ -131,13 +123,13 @@ exports[`should render correctly 1`] = `
           class=" rounded-full dark:bg-purple-950 px-4 py-2 font-semibold no-underline transition dark:hover:bg-pink-800 dark:focus:bg-pink-800 dark:hover:drop-shadow-glow dark:focus:drop-shadow-glow "
           type="button"
         >
-          +1
+          Delete
         </button>
         <button
           class=" rounded-full dark:bg-purple-950 px-4 py-2 font-semibold no-underline transition dark:hover:bg-pink-800 dark:focus:bg-pink-800 dark:hover:drop-shadow-glow dark:focus:drop-shadow-glow "
           type="button"
         >
-          Delete
+          +1
         </button>
       </div>
     </div>
