@@ -26,7 +26,7 @@ export function CollectionCards({ cards }: CollectionCardsProps) {
       if (count - 1 < 0) {
         alert('you shouldn\'t be able to do that')
       } else {
-        // TODO: Confirm user want to remove card? #configurable
+        // TODO: Confirm remove card when 0? #configurable
         await mutation.mutateAsync({ collectionId, cardId: card.id, count: count - 1 })
       }
       context.collection.byId.invalidate({ id: collectionId })
@@ -39,7 +39,7 @@ export function CollectionCards({ cards }: CollectionCardsProps) {
         </div>
         <div className="flex items-center gap-4">
           <p>{count}</p>
-          <Button onClick={removeCard}>{count == 1 ? "Delete" : "-1"}</Button>
+          <Button onClick={removeCard}>-1</Button>
           <Button onClick={addCard}>+1</Button>
         </div>
       </div>

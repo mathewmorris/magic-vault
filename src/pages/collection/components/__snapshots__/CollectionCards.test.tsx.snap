@@ -92,7 +92,7 @@ exports[`should render correctly 1`] = `
             class=" rounded-full dark:bg-purple-950 px-4 py-2 font-semibold no-underline transition dark:hover:bg-pink-800 dark:focus:bg-pink-800 dark:hover:drop-shadow-glow dark:focus:drop-shadow-glow "
             type="button"
           >
-            Delete
+            -1
           </button>
           <button
             class=" rounded-full dark:bg-purple-950 px-4 py-2 font-semibold no-underline transition dark:hover:bg-pink-800 dark:focus:bg-pink-800 dark:hover:drop-shadow-glow dark:focus:drop-shadow-glow "
@@ -123,7 +123,7 @@ exports[`should render correctly 1`] = `
           class=" rounded-full dark:bg-purple-950 px-4 py-2 font-semibold no-underline transition dark:hover:bg-pink-800 dark:focus:bg-pink-800 dark:hover:drop-shadow-glow dark:focus:drop-shadow-glow "
           type="button"
         >
-          Delete
+          -1
         </button>
         <button
           class=" rounded-full dark:bg-purple-950 px-4 py-2 font-semibold no-underline transition dark:hover:bg-pink-800 dark:focus:bg-pink-800 dark:hover:drop-shadow-glow dark:focus:drop-shadow-glow "

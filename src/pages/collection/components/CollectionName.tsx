@@ -1,6 +1,5 @@
 import { ChangeEvent, KeyboardEvent, useRef, useState } from "react";
 import Button from "~/components/Button";
-import { api } from "~/utils/api";
 
 type CollectionNameProps = {
   name: string,
@@ -63,8 +62,8 @@ export function CollectionName({ name, onSave }: CollectionNameProps) {
   }
 
   return (
-    <div className="flex justify-between">
-      <>
+    <>
+      <div className="flex justify-between">
         <h1 className={`text-xl flex-1 ${isEditing ? 'hidden' : 'visible'}`}>{newName}</h1>
         <input
           aria-label="collection name"
@@ -77,12 +76,6 @@ export function CollectionName({ name, onSave }: CollectionNameProps) {
           onKeyDown={handleKeyDown}
           ref={inputRef}
         />
-        {error ? (
-          <div>
-            <p role="alert">An error occurred: {error}</p>
-            <Button role="button" onClick={acknowledgeError}>Acknowledge</Button>
-          </div>
-        ) : null}
         {isEditing ? (
           <div className="flex gap-4">
             <Button type="button" onClick={cancel}>Cancel</Button>
@@ -96,8 +89,19 @@ export function CollectionName({ name, onSave }: CollectionNameProps) {
         ) : (
           <Button type="button" onClick={handleEdit}>Edit</Button>
         )}
-      </>
-    </div>
+      </div>
+      <div>
+        {error && (
+          <div className="bg-red-500 rounded">Errors</div>
+        )}
+        {error && (
+          <div className="absolute bg-gray-200 mt-4 py-2 px-4 rounded flex flex-row">
+            <p role="alert" className="text-black">{error}</p>
+            <Button role="button" onClick={acknowledgeError}>Got it</Button>
+          </div>
+        )}
+      </div>
+    </>
   )
 }
 

@@ -2,6 +2,7 @@ import { useRouter } from 'next/router';
 import { api } from '~/utils/api';
 import { CollectionName } from './components/CollectionName';
 import CollectionCards from './components/CollectionCards';
+import Toolbar from './components/Toolbar';
 
 export function CollectionDetailsPage() {
   const router = useRouter()
@@ -19,6 +20,7 @@ export function CollectionDetailsPage() {
   return (
     <div>
       <CollectionName name={collection?.name ?? ''} onSave={handleSave} />
+      <Toolbar />
       <CollectionCards cards={collection?.cards} />
     </div>
   );

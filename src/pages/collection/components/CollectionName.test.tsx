@@ -49,6 +49,6 @@ test("should keep editing when displaying rename error", async () => {
   getByText(/cancel/i)
   expect(handleSave).toHaveBeenCalledTimes(0)
 
-  await userEvent.click(getByText(/acknowledge/i))
-  expect(queryByText(/acknowledge/i)).toBeNull()
+  await userEvent.click(getByText(/got it/i))
+  expect(queryByText(/got it/i)).toBeNull()
 })

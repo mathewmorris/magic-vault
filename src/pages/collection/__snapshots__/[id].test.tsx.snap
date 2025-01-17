@@ -27,6 +27,12 @@ exports[`Collection Details Page should render correctly 1`] = `
             Edit
           </button>
         </div>
+        <div />
+        <div>
+          <p>
+            Add New Card
+          </p>
+        </div>
         <div>
           No cards
         </div>
@@ -55,6 +61,12 @@ exports[`Collection Details Page should render correctly 1`] = `
         >
           Edit
         </button>
+      </div>
+      <div />
+      <div>
+        <p>
+          Add New Card
+        </p>
       </div>
       <div>
         No cards
