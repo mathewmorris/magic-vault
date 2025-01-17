@@ -14,11 +14,16 @@ test("should save new name", async () => {
     <CollectionName name="My Collection" onSave={handleSave} />
   );
 
+  // 1. Click on Edit Button
   await userEvent.click(getByText('Edit'));
+  // 2. Change name
   await userEvent.type(getByLabelText(/collection name/i), ' Edited')
+  // 3. Save changes
   await userEvent.click(getByText(/save/i))
   expect(handleSave).toHaveBeenCalledTimes(1)
   expect(handleSave).toHaveBeenCalledWith('My Collection Edited')
+  // 4. display success message
+  expect(getByText(/name updated!/i)).toBeTruthy()
 })
 
 test("should stop editing on cancel", async () => {

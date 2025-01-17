@@ -8,6 +8,25 @@ type CollectionNameProps = {
   onSave: (name: string) => void,
 }
 
+export function Notification({ message }: { message: string }) {
+  return (
+    <motion.div
+      className="bg-pink-700 fixed bottom-1 end-1 rounded p-8 m-4"
+    >
+      <p>{message}</p>
+    </motion.div>
+  )
+}
+
+// TODO: Think about puttin this in a higher layer
+export function Notifications() {
+  return (
+    <div>
+
+    </div>
+  )
+}
+
 export function CollectionName({ name, onSave }: CollectionNameProps) {
   const [newName, setNewName] = useState(name);
   const [isEditing, setIsEditing] = useState(false);
@@ -68,6 +87,10 @@ export function CollectionName({ name, onSave }: CollectionNameProps) {
 
   return (
     <div className="flex justify-between">
+      <Notification message="Show message!" />
+      <Notification message="Show message!" />
+      <Notification message="Show message!" />
+      <Notification message="Show message!" />
       <>
         <h1 className={`text-xl flex-1 ${isEditing ? 'hidden' : 'visible'}`}>{newName}</h1>
         <input
