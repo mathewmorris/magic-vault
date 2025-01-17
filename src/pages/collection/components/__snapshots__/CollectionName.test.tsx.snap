@@ -9,10 +9,18 @@ exports[`should render correctly 1`] = `
         class="flex justify-between"
       >
         <h1
-          class="text-xl"
+          class="text-xl flex-1 visible"
         >
           My Collection
         </h1>
+        <input
+          aria-hidden="true"
+          aria-label="collection name"
+          class="text-black mr-8 flex-1 hidden"
+          id="collectionName"
+          type="text"
+          value="My Collection"
+        />
         <button
           class=" rounded-full dark:bg-purple-950 px-4 py-2 font-semibold no-underline transition dark:hover:bg-pink-800 dark:focus:bg-pink-800 dark:hover:drop-shadow-glow dark:focus:drop-shadow-glow "
           type="button"
@@ -27,10 +35,18 @@ exports[`should render correctly 1`] = `
       class="flex justify-between"
     >
       <h1
-        class="text-xl"
+        class="text-xl flex-1 visible"
       >
         My Collection
       </h1>
+      <input
+        aria-hidden="true"
+        aria-label="collection name"
+        class="text-black mr-8 flex-1 hidden"
+        id="collectionName"
+        type="text"
+        value="My Collection"
+      />
       <button
         class=" rounded-full dark:bg-purple-950 px-4 py-2 font-semibold no-underline transition dark:hover:bg-pink-800 dark:focus:bg-pink-800 dark:hover:drop-shadow-glow dark:focus:drop-shadow-glow "
         type="button"
