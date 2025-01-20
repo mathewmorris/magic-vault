@@ -11,10 +11,11 @@ export function CollectionDetailsPage() {
   const mutation = api.collection.rename.useMutation()
   const context = api.useContext()
 
-  async function handleSave(name: string) {
+  function handleSave(name: string) {
     if (!collection) return null;
-    await mutation.mutateAsync({ id: collection.id, name })
-    context.collection.byId.invalidate({ id: collection.id })
+    void mutation.mutateAsync({ id: collection.id, name }).then(() => {
+      void context.collection.byId.invalidate({ id: collection.id })
+    })
   }
 
   return (

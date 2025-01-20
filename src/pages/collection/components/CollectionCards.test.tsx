@@ -1,5 +1,5 @@
 import { render } from "utils/test-utils"
-import CollectionCards, { CollectionCard } from "./CollectionCards";
+import CollectionCards, { type CollectionCard } from "./CollectionCards";
 
 const card: CollectionCard = {
   cardId: "card123",
@@ -26,7 +26,7 @@ test("should render correctly", () => {
   expect(component).toMatchSnapshot();
 })
 
-test("should handle no cards", async () => {
+test("should handle no cards", () => {
   const component = render(
     <CollectionCards cards={[]} />
   );

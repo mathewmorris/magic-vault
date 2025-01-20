@@ -1,4 +1,4 @@
-import { ChangeEvent, KeyboardEvent, useRef, useState } from "react";
+import { type ChangeEvent, type KeyboardEvent, useRef, useState } from "react";
 import Button from "~/components/Button";
 
 type CollectionNameProps = {
@@ -22,7 +22,7 @@ export function CollectionName({ name, onSave }: CollectionNameProps) {
     return true;
   }
 
-  async function save() {
+  function save() {
     if (isValid(newName)) {
       onSave(newName)
       setIsEditing(false)

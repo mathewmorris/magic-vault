@@ -11,7 +11,6 @@ const config: Config = {
   testEnvironment: 'jest-fixed-jsdom',
   roots: ['<rootDir>'],
   moduleNameMapper: {
-    "^singleton$": "<rootDir>/utils/singleton.ts",
     "^utils$": "<rootDir>/utils/*"
   },
   setupFilesAfterEnv: ['<rootDir>/utils/singleton.ts', '<rootDir>/utils/setupTests.ts'],

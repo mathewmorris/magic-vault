@@ -1,4 +1,4 @@
-import { Card, CardsOnCollections } from "@prisma/client";
+import type { Card, CardsOnCollections } from "@prisma/client";
 import Button from "~/components/Button";
 import { api } from "~/utils/api";
 
@@ -17,19 +17,21 @@ export function CollectionCards({ cards }: CollectionCardsProps) {
   }
 
   return cards.map(({ card, collectionId, count }) => {
-    async function addCard() {
-      await mutation.mutateAsync({ collectionId, cardId: card.id, count: count + 1 })
-      context.collection.byId.invalidate({ id: collectionId })
+    function addCard() {
+      void mutation.mutateAsync({ collectionId, cardId: card.id, count: count + 1 }).then(() => {
+        void context.collection.byId.invalidate({ id: collectionId })
+      })
     }
 
-    async function removeCard() {
+    function removeCard() {
       if (count - 1 < 0) {
         alert('you shouldn\'t be able to do that')
       } else {
         // TODO: Confirm remove card when 0? #configurable
-        await mutation.mutateAsync({ collectionId, cardId: card.id, count: count - 1 })
+        void mutation.mutateAsync({ collectionId, cardId: card.id, count: count - 1 }).then(() => {
+          void context.collection.byId.invalidate({ id: collectionId })
+        })
       }
-      context.collection.byId.invalidate({ id: collectionId })
     }
 
     return (
