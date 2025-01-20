@@ -73,8 +73,13 @@ export const collectionRouter = createTRPCRouter({
             include: {
               card: true,
             },
+            orderBy: {
+              card: {
+                id: 'asc'
+              }
+            }
           },
-        }
+        },
       });
     }),
 
