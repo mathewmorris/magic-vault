@@ -3,7 +3,7 @@ import Button from "~/components/Button";
 import { api } from "~/utils/api";
 
 export default function DeletedCollections({ }) {
-  const { data: collections } = api.collection.getDeletedCollections.useQuery();
+  const { data: collections } = api.collection.getDeleted.useQuery();
   const router = useRouter();
 
   return (

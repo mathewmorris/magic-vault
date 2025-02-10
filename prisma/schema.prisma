@@ -1,6 +1,6 @@
 generator client {
-    provider = "prisma-client-js"
-    previewFeatures = ["driverAdapters"]
+  provider        = "prisma-client-js"
+  previewFeatures = ["driverAdapters", "relationJoins"]
 }
 
 datasource db {
@@ -9,70 +9,85 @@ datasource db {
 }
 
 model Card {
-  id              String  @id
-  name            String
-  scryfall_uri    String
-  image_status    String
-  image_uris      Json?   @db.JsonB
-  card_faces      Json?   @db.JsonB
-  all_parts       Json?   @db.JsonB
-  layout          String
+  id                 String               @id
+  name               String
+  scryfall_uri       String
+  image_status       String
+  image_uris         Json?                @db.JsonB
+  card_faces         Json?                @db.JsonB
+  all_parts          Json?                @db.JsonB
+  layout             String
+  collections CardsOnCollections[]
 }
 
 model Collection {
-    id            String   @id @default(cuid())
-    name          String?   @default("My Collection")
-    cards         String[]
-    createdAt     DateTime @default(now())
-    updatedAt     DateTime @updatedAt
-    user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-    userId        String
-    deletedAt       DateTime?
+  id                 String               @id @default(cuid())
+  name               String               @default("My Collection")
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+  user               User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId             String
+  deletedAt          DateTime?
+  cards CardsOnCollections[]
+}
+
+model CardsOnCollections {
+  card         Card       @relation(fields: [cardId], references: [id])
+  cardId       String
+  collection   Collection @relation(fields: [collectionId], references: [id])
+  collectionId String
+  count        Int        @default(1)
+
+  assignedAt DateTime @default(now())
+
+  assignedBy String
+
+  @@id([cardId, collectionId])
 }
 
 // Necessary for Next auth
 model Account {
-    id                String  @id @default(cuid())
-    userId            String
-    type              String
-    provider          String
-    providerAccountId String
-    refresh_token     String? @db.Text
-    access_token      String? @db.Text
-    expires_at        Int?
-    token_type        String?
-    scope             String?
-    id_token          String? @db.Text
-    session_state     String?
-    user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-    refresh_token_expires_in Int?
+  id                       String  @id @default(cuid())
+  userId                   String
+  type                     String
+  provider                 String
+  providerAccountId        String
+  refresh_token            String? @db.Text
+  access_token             String? @db.Text
+  expires_at               Int?
+  token_type               String?
+  scope                    String?
+  id_token                 String? @db.Text
+  session_state            String?
+  user                     User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  refresh_token_expires_in Int?
 
-    @@unique([provider, providerAccountId])
+  @@unique([provider, providerAccountId])
 }
 
 model Session {
-    id           String   @id @default(cuid())
-    sessionToken String   @unique
-    userId       String
-    expires      DateTime
-    user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model User {
-    id            String    @id @default(cuid())
-    name          String?
-    email         String?   @unique
-    emailVerified DateTime?
-    image         String?
-    accounts      Account[]
-    sessions      Session[]
-    collections   Collection[]
+  id            String       @id @default(cuid())
+  name          String?
+  email         String?      @unique
+  emailVerified DateTime?
+  image         String?
+  accounts      Account[]
+  sessions      Session[]
+  collections   Collection[]
 }
 
 model VerificationToken {
-    identifier String
-    token      String   @unique
-    expires    DateTime
+  identifier String
+  token      String   @unique
+  expires    DateTime
 
-    @@unique([identifier, token])
+  @@unique([identifier, token])
 }

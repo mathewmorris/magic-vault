@@ -9,6 +9,37 @@ import {
 } from "~/server/api/trpc";
 import { verifyCollectionOwnership } from "~/server/api/util";
 
+type CardsOnCollectionConnection = {
+  assignedBy: string;
+  assignedAt: Date;
+  count: number;
+  card: {
+    connect: {
+      id: string;
+    }
+  }
+}
+
+function createCardCollectionConnectionArray(cards: Map<string, number>, assignedBy: string): CardsOnCollectionConnection[] {
+  const cardsToConnect: CardsOnCollectionConnection[] = [];
+  const assignedAt = new Date();
+
+  cards.forEach((count, id) => {
+    cardsToConnect.push({
+      assignedBy,
+      assignedAt,
+      count,
+      card: {
+        connect: {
+          id,
+        },
+      },
+    });
+  });
+
+  return cardsToConnect;
+}
+
 export const collectionRouter = createTRPCRouter({
   getAll: protectedProcedure.query(({ ctx }) => {
     return ctx.prisma.collection.findMany({
@@ -16,10 +47,10 @@ export const collectionRouter = createTRPCRouter({
         userId: ctx.session.user.id,
         deletedAt: null,
       }
-    });
+    })
   }),
 
-  getDeletedCollections: protectedProcedure.query(async ({ ctx }) => {
+  getDeleted: protectedProcedure.query(async ({ ctx }) => {
     return ctx.prisma.collection.findMany({
       where: {
         userId: ctx.session.user.id,
@@ -36,42 +67,110 @@ export const collectionRouter = createTRPCRouter({
       return ctx.prisma.collection.findUnique({
         where: {
           id: input.id
-        }
+        },
+        include: {
+          cards: {
+            include: {
+              card: true,
+            },
+            orderBy: {
+              card: {
+                id: 'asc'
+              }
+            }
+          },
+        },
       });
     }),
 
-  create: protectedProcedure.input(z.object({ name: z.string(), cards: z.string().array() }))
+  create: protectedProcedure.input(z.object({
+    name: z.string(),
+    cards: z.map(z.string(), z.number()),
+  }))
     .mutation(async ({ ctx, input }) => {
+      const cardsToConnect = createCardCollectionConnectionArray(input.cards, ctx.session.user.name!);
 
       const collection = await ctx.prisma.collection.create({
         data: {
           name: input.name,
-          cards: input.cards,
+          cards: {
+            create: cardsToConnect,
+          },
           user: {
             connect: {
               id: ctx.session.user.id
             }
           }
+        },
+        include: {
+          cards: true,
         }
       });
 
       return collection;
     }),
 
-  update: protectedProcedure.input(z.object({ id: z.string(), name: z.string().optional(), cards: z.string().array().optional() }))
-    .mutation(async ({ ctx, input }) => {
-      const collection = await ctx.prisma.collection.update({
+  rename: protectedProcedure.input(z.object({
+    id: z.string(),
+    name: z.string(),
+  })).mutation(async ({ ctx, input: { id, name } }) => {
+    const collection = await verifyCollectionOwnership(ctx.prisma, ctx.session.user.id, id)
+
+    return await ctx.prisma.collection.update({
+      where: {
+        id: collection.id,
+      },
+      data: {
+        name,
+      }
+    })
+  }),
+  setCardCount: protectedProcedure.input(z.object({
+    collectionId: z.string(),
+    cardId: z.string(),
+    count: z.number(),
+  })).mutation(async ({ ctx, input: { collectionId, cardId, count } }) => {
+    const collection = await verifyCollectionOwnership(ctx.prisma, ctx.session.user.id, collectionId)
+
+    if (count <= 0) {
+      await ctx.prisma.cardsOnCollections.delete({
         where: {
-          id: input.id,
+          cardId_collectionId: {
+            collectionId: collection.id,
+            cardId,
+          }
+        }
+      })
+    } else {
+      await ctx.prisma.cardsOnCollections.upsert({
+        where: {
+          cardId_collectionId: {
+            collectionId: collection.id,
+            cardId,
+          }
         },
-        data: {
-          name: input.name,
-          cards: input.cards,
+        create: {
+          assignedBy: ctx.session.user.name!,
+          assignedAt: new Date(),
+          count,
+          collection: {
+            connect: {
+              id: collection.id,
+            },
+          },
+          card: {
+            connect: {
+              id: cardId,
+            }
+          }
+        },
+        update: {
+          count: count,
         },
       })
+    }
 
-      return collection;
-    }),
+  }),
 
   softDelete: protectedProcedure.input(z.object({ collectionId: z.string() }))
     .mutation(async ({ ctx, input }) => {

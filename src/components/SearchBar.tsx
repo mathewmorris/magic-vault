@@ -4,12 +4,12 @@ import { api } from "~/utils/api";
 import Button from "./Button";
 
 interface SearchBarProps {
-  onSelectedChange: (cardIds: string[]) => void;
+  onAddCard: (cardId: string) => void;
+  onRemoveCard: (cardId: string) => void;
 }
 
-export default function SearchBar({ onSelectedChange }: SearchBarProps) {
+export default function SearchBar({ onAddCard, onRemoveCard }: SearchBarProps) {
   const [input, setInput] = useState('');
-  const [selectedCards, setSelectedCards] = useState<string[]>([]);
 
   const {
     data: searchResults,
@@ -28,18 +28,6 @@ export default function SearchBar({ onSelectedChange }: SearchBarProps) {
       enabled: false,
     }
   )
-
-  function addCard(cardId: string) {
-    const updated = [...selectedCards, cardId];
-    onSelectedChange(updated);
-    setSelectedCards(updated);
-  }
-
-  function removeCard(cardId: string) {
-    const updated = selectedCards.filter(card => card !== cardId);
-    onSelectedChange(updated);
-    setSelectedCards(updated);
-  }
 
   return (
     <>
@@ -68,10 +56,8 @@ export default function SearchBar({ onSelectedChange }: SearchBarProps) {
                 >
                   {images?.small && <Image src={images.small} width={146} height={204} alt={card.name} className="m-2 rounded-lg" />}
                 </div>
-                {selectedCards.includes(card.id) ?
-                  <Button type="button" onClick={() => removeCard(card.id)}>Remove Card</Button> :
-                  <Button type="button" onClick={() => addCard(card.id)}>Add Card</Button>
-                }
+                <Button type="button" onClick={() => onRemoveCard(card.id)}>Remove 1</Button>
+                <Button type="button" onClick={() => onAddCard(card.id)}>Add 1</Button>
               </div>
             )
           })

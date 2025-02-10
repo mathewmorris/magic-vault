@@ -1,6 +1,6 @@
-import { verifyCollectionOwnership } from "./verifyCollectionOwnership";
+import prismaMock from "test-utils/singleton";
+import { verifyCollectionOwnership } from "~/server/api/util/verifyCollectionOwnership";
 import { TRPCError } from "@trpc/server";
-import prismaMock from "singleton";
 
 describe("verifyCollectionOwnership", () => {
   const userId = "user123";
@@ -15,7 +15,6 @@ describe("verifyCollectionOwnership", () => {
     const collection = {
       id: collectionId,
       name: "Collection",
-      cards: [],
       userId,
       updatedAt: dateNow,
       createdAt: dateNow,
@@ -44,7 +43,6 @@ describe("verifyCollectionOwnership", () => {
       id: collectionId,
       userId: "otherUser789",
       name: "Collection",
-      cards: [],
       updatedAt: new Date(),
       createdAt: new Date(),
       deletedAt: null,

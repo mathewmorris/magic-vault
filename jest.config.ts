@@ -8,12 +8,9 @@ const createJestConfig = nextJest({
 const config: Config = {
   coverageProvider: 'v8',
   preset: 'ts-jest',
-  testEnvironment: 'node',
+  testEnvironment: 'jest-fixed-jsdom',
   roots: ['<rootDir>'],
-  moduleNameMapper: {
-    "^singleton$": "<rootDir>/singleton.ts"
-  },
-  setupFilesAfterEnv: ['<rootDir>/singleton.ts'],
+  setupFilesAfterEnv: ['<rootDir>/__test__/utils/singleton.ts', '<rootDir>/__test__/utils/setupTests.ts'],
   clearMocks: true,
 }
 
