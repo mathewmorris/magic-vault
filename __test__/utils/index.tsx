@@ -1,6 +1,6 @@
 import React, { ReactElement, ReactNode } from 'react'
 import { render, RenderOptions } from '@testing-library/react'
-import { api } from '~/utils/api'
+import { api } from '../../src/utils/api'
 
 function Wrapper({ children }: { children: ReactNode }) {
   return (

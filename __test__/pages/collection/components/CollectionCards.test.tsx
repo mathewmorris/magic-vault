@@ -1,5 +1,5 @@
-import { render } from "utils/test-utils"
-import CollectionCards, { type CollectionCard } from "./CollectionCards";
+import { render } from "../../../utils";
+import CollectionCards, { CollectionCard } from "~/pages/collection/components/CollectionCards";
 
 const card: CollectionCard = {
   cardId: "card123",

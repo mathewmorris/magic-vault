@@ -105,3 +105,5 @@ export function CollectionName({ name, onSave }: CollectionNameProps) {
   )
 }
 
+export default CollectionName
+

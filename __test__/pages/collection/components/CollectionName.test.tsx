@@ -1,6 +1,6 @@
-import { render } from "utils/test-utils"
+import { render } from "../../../utils"
 import userEvent from "@testing-library/user-event";
-import { CollectionName } from "./CollectionName"
+import { CollectionName } from "../../../../src/pages/collection/components/CollectionName"
 
 test("should render correctly", () => {
   const handleSave = jest.fn();

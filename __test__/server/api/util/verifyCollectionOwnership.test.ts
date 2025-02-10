@@ -1,6 +1,6 @@
-import { verifyCollectionOwnership } from "./verifyCollectionOwnership";
+import prismaMock from "test-utils/singleton";
+import { verifyCollectionOwnership } from "~/server/api/util/verifyCollectionOwnership";
 import { TRPCError } from "@trpc/server";
-import prismaMock from "utils/singleton";
 
 describe("verifyCollectionOwnership", () => {
   const userId = "user123";

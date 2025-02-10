@@ -10,10 +10,7 @@ const config: Config = {
   preset: 'ts-jest',
   testEnvironment: 'jest-fixed-jsdom',
   roots: ['<rootDir>'],
-  moduleNameMapper: {
-    "^utils$": "<rootDir>/utils/*"
-  },
-  setupFilesAfterEnv: ['<rootDir>/utils/singleton.ts', '<rootDir>/utils/setupTests.ts'],
+  setupFilesAfterEnv: ['<rootDir>/__test__/utils/singleton.ts', '<rootDir>/__test__/utils/setupTests.ts'],
   clearMocks: true,
 }
 
