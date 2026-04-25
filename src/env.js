@@ -1,6 +1,23 @@
 import { z } from "zod";
 import { createEnv } from "@t3-oss/env-nextjs";
 
+// Vercel sets NODE_ENV=production for both preview and production builds,
+// so VERCEL_ENV is the only reliable way to distinguish them. Outside Vercel
+// (local builds, docker), fall back to NODE_ENV.
+const isProdDeploy =
+  process.env.VERCEL_ENV === "production" ||
+  (!process.env.VERCEL && process.env.NODE_ENV === "production");
+
+/**
+ * Mark a schema as required only in the production deploy, optional in
+ * preview/dev. Lets PR previews build without real OAuth/email credentials.
+ *
+ * @template {z.ZodTypeAny} T
+ * @param {T} schema
+ * @returns {T | z.ZodOptional<T>}
+ */
+const prodRequired = (schema) => (isProdDeploy ? schema : schema.optional());
+
 export const env = createEnv({
   /**
    * Specify your server-side environment variables schema here. This way you can ensure the app
@@ -9,10 +26,7 @@ export const env = createEnv({
   server: {
     DATABASE_URL: z.string().url(),
     NODE_ENV: z.enum(["development", "test", "production"]),
-    NEXTAUTH_SECRET:
-      process.env.NODE_ENV === "production"
-        ? z.string().min(1)
-        : z.string().min(1).optional(),
+    NEXTAUTH_SECRET: prodRequired(z.string().min(1)),
     NEXTAUTH_URL: z.preprocess(
       // This makes Vercel deployments not fail if you don't set NEXTAUTH_URL
       // Since NextAuth.js automatically uses the VERCEL_URL if present.
@@ -20,15 +34,16 @@ export const env = createEnv({
       // VERCEL_URL doesn't include `https` so it cant be validated as a URL
       process.env.VERCEL ? z.string().min(1) : z.string().url()
     ),
-    // Add `.min(1) on ID and SECRET if you want to make sure they're not empty
-    DISCORD_CLIENT_ID: z.string(),
-    DISCORD_CLIENT_SECRET: z.string(),
-    GITHUB_ID: z.string(),
-    GITHUB_SECRET: z.string(),
-    GOOGLE_ID: z.string(),
-    GOOGLE_SECRET: z.string(),
-    EMAIL_SERVER: z.string(),
-    EMAIL_FROM: z.string().email(),
+    // OAuth + email creds are required in production but optional in preview/dev
+    // so PR previews don't need real credentials wired up to build.
+    DISCORD_CLIENT_ID: prodRequired(z.string()),
+    DISCORD_CLIENT_SECRET: prodRequired(z.string()),
+    GITHUB_ID: prodRequired(z.string()),
+    GITHUB_SECRET: prodRequired(z.string()),
+    GOOGLE_ID: prodRequired(z.string()),
+    GOOGLE_SECRET: prodRequired(z.string()),
+    EMAIL_SERVER: prodRequired(z.string()),
+    EMAIL_FROM: prodRequired(z.string().email()),
   },
 
   /**

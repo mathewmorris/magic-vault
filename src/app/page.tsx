@@ -1,7 +1,9 @@
+"use client";
+
 import { useSession } from "next-auth/react";
 import Link from "next/link";
 
-const App = () => {
+export default function Home() {
   const { data: sessionData } = useSession();
 
   return (
@@ -14,9 +16,5 @@ const App = () => {
         </div>
       )}
     </div>
-  )
-
-};
-
-export default App;
-
+  );
+}
