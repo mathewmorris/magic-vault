@@ -9,7 +9,7 @@
     "dev:docker": "docker compose up -d",
     "dev:logs": "docker compose logs -f",
     "rebuild-frontend": "docker compose up -d --build next-app",
-    "lint": "next lint",
+    "lint": "eslint src",
     "start": "next start",
     "test": "SKIP_ENV_VALIDATION=true jest",
     "test:debug": "SKIP_ENV_VALIDATION=true jest --watch",
