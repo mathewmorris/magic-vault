@@ -10,6 +10,7 @@ const config: Config = {
   preset: 'ts-jest',
   testEnvironment: 'node',
   roots: ['<rootDir>'],
+  testPathIgnorePatterns: ['/node_modules/', '/.next/', '/e2e/'],
   moduleNameMapper: {
     "^singleton$": "<rootDir>/singleton.ts"
   },

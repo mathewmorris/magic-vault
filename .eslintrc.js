@@ -30,6 +30,9 @@ const config = {
       files: ["**/*.test.ts"],
       env: {
         jest: true
+      },
+      rules: {
+        "@typescript-eslint/unbound-method": "off",
       }
     }
   ]
