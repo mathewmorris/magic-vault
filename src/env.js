@@ -27,6 +27,8 @@ export const env = createEnv({
     GITHUB_SECRET: z.string(),
     GOOGLE_ID: z.string(),
     GOOGLE_SECRET: z.string(),
+    EMAIL_SERVER: z.string(),
+    EMAIL_FROM: z.string().email(),
   },
 
   /**
@@ -53,6 +55,8 @@ export const env = createEnv({
     GITHUB_SECRET: process.env.GITHUB_SECRET,
     GOOGLE_ID: process.env.GOOGLE_ID,
     GOOGLE_SECRET: process.env.GOOGLE_SECRET,
+    EMAIL_SERVER: process.env.EMAIL_SERVER,
+    EMAIL_FROM: process.env.EMAIL_FROM,
   },
   /**
    * Run `build` or `dev` with `SKIP_ENV_VALIDATION` to skip env validation.

@@ -29,6 +29,13 @@ services:
 # database data between container restarts. The `db-password` secret is used
 # to set the database password. You must create `db/password.txt` and add
 # a password of your choosing to it before running `docker-compose up`.
+  mailcatcher:
+    container_name: magicvault-mailcatcher
+    image: schickling/mailcatcher
+    ports:
+      - 1080:1080
+      - 1025:1025
+
   db:
     container_name: magicvault-db
     image: postgres
