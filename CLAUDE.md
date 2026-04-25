@@ -50,20 +50,62 @@ bd close <id>         # Complete work
 <!-- END BEADS INTEGRATION -->
 
 
+## Stack
+
+- Next.js 13 (pages router)
+- tRPC for type-safe APIs
+- Prisma + PostgreSQL
+- NextAuth (Discord, GitHub, Google, Email magic link)
+- TailwindCSS
+- Jest for testing
+
 ## Build & Test
 
-_Add your build and test commands here_
-
 ```bash
-# Example:
-# npm install
-# npm test
+npm run dev:docker        # Start full stack (Next.js + Postgres + Mailcatcher)
+npm run rebuild-frontend  # Rebuild Next.js only
+npm run test              # Run Jest tests
 ```
+
+Mailcatcher UI at `localhost:1080` for magic link emails.
 
 ## Architecture Overview
 
-_Add a brief overview of your project architecture_
+```
+src/
+├── pages/               # Next.js pages + API routes
+├── server/
+│   ├── api/
+│   │   ├── routers/     # tRPC routers (collection.ts, card.ts)
+│   │   └── util/        # Shared utils (verifyCollectionOwnership.ts)
+│   ├── auth.ts          # NextAuth config
+│   └── db.ts            # Prisma client singleton
+├── components/          # React components
+└── utils/               # Client utilities
+prisma/
+├── schema.prisma        # Database schema
+└── migrations/          # Migration history
+```
 
 ## Conventions & Patterns
 
-_Add your project-specific conventions here_
+### tRPC Routers
+- Located in `src/server/api/routers/`
+- Use `protectedProcedure` for authenticated endpoints
+- Use `publicProcedure` for unauthenticated (e.g., card search)
+- Validate with Zod schemas inline
+- Authorization via `verifyCollectionOwnership` utility
+
+### Testing
+- Colocate tests: `Component.test.ts` next to `Component.ts`
+- Follow Arrange-Act-Assert pattern
+- Mock Prisma using `jest-mock-extended`
+
+### Database
+- Soft delete pattern: `deletedAt` field (null = active)
+- Collections tied to users via `userId`, cascade delete
+
+### Deployment
+- Vercel hosting
+- Push to branch = preview deploy
+- Merge to main = production (migrations GitHub Action is broken, needs fix)
