@@ -1,6 +1,8 @@
-import Link from "next/link"
-import { type Collection } from "@prisma/client"
-import { api } from "~/utils/api"
+"use client";
+
+import Link from "next/link";
+import { type Collection } from "@prisma/client";
+import { api } from "~/utils/api";
 
 const CollectionList = ({ collections }: { collections: Collection[] }) => {
   if (collections.length < 1) {
@@ -8,16 +10,16 @@ const CollectionList = ({ collections }: { collections: Collection[] }) => {
       <>
         <p>No collections...</p>
       </>
-    )
+    );
   }
 
-  return (collections.map(collection => (
+  return collections.map((collection) => (
     <div key={collection.id}>
       <span>{collection.name}</span>
       <Link href={`/collection/${collection.id}`}>View Collection</Link>
     </div>
-  )))
-}
+  ));
+};
 
 export default function CollectionsIndex() {
   const { data: collections } = api.collection.getAll.useQuery();
@@ -28,6 +30,5 @@ export default function CollectionsIndex() {
       <p>Your collections</p>
       <CollectionList collections={collections ?? []} />
     </div>
-  )
+  );
 }
-
