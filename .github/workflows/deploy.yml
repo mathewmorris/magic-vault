@@ -1,23 +1,30 @@
-name: Deploy
+name: Migrate database
 on:
   push:
     branches:
       - main
 
 jobs:
-  deploy:
+  migrate:
+    name: Apply Prisma migrations
     runs-on: ubuntu-latest
     environment: production
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
+
       - name: Setup Node
         uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
       - name: Install dependencies
-        run: npm install
-      - run: npm run build
-      - name: Apply all pending migrations to the database
+        run: npm ci
+        env:
+          SKIP_ENV_VALIDATION: "true"
+
+      - name: Apply pending Prisma migrations
         run: npx prisma migrate deploy
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
-
