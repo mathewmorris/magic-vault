@@ -1,17 +1,22 @@
 import { z } from "zod";
 import { createEnv } from "@t3-oss/env-nextjs";
 
-const isProd = process.env.NODE_ENV === "production";
+// Vercel sets NODE_ENV=production for both preview and production builds,
+// so VERCEL_ENV is the only reliable way to distinguish them. Outside Vercel
+// (local builds, docker), fall back to NODE_ENV.
+const isProdDeploy =
+  process.env.VERCEL_ENV === "production" ||
+  (!process.env.VERCEL && process.env.NODE_ENV === "production");
 
 /**
- * Mark a schema as required only in production, optional in preview/dev.
- * Mirrors the t3-env pattern that lets non-prod builds skip credentials.
+ * Mark a schema as required only in the production deploy, optional in
+ * preview/dev. Lets PR previews build without real OAuth/email credentials.
  *
  * @template {z.ZodTypeAny} T
  * @param {T} schema
  * @returns {T | z.ZodOptional<T>}
  */
-const prodRequired = (schema) => (isProd ? schema : schema.optional());
+const prodRequired = (schema) => (isProdDeploy ? schema : schema.optional());
 
 export const env = createEnv({
   /**
