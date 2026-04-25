@@ -1,0 +1,7 @@
+{
+  "database": "dolt",
+  "backend": "dolt",
+  "dolt_mode": "embedded",
+  "dolt_database": "magicvault",
+  "project_id": "0d235468-c092-45f1-b54b-5ed06411fd4c"
+}
