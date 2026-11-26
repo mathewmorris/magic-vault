@@ -73,13 +73,15 @@ jobs:
           DOWNLOAD_URI: ${{ steps.check.outputs.download_uri }}
         run: python sync.py download "$DOWNLOAD_URI" --out default_cards.json
 
+      # --prune deletes cards that are no longer in the bulk file, except
+      # ones a collection still uses (those are logged and kept).
       - name: Apply new and changed cards
         if: steps.check.outputs.changed == 'true'
         env:
           UPDATED_AT: ${{ steps.check.outputs.updated_at }}
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: |
-          args=(apply default_cards.json --state-dir state --updated-at "$UPDATED_AT")
+          args=(apply default_cards.json --state-dir state --updated-at "$UPDATED_AT" --prune)
           if [ "$DRY_RUN" = "true" ]; then args+=(--dry-run); fi
           if [ "$FULL" = "true" ]; then args+=(--full); fi
           python sync.py "${args[@]}"
