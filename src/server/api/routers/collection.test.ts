@@ -141,9 +141,77 @@ describe("collection procedures", () => {
                 data: {
                     name: "Collection",
                     cards: ["c1", "c2"],
+                    cardEntries: {
+                        create: [
+                            { cardId: "c1", count: 1, createdAt: expect.any(Date) as Date },
+                            { cardId: "c2", count: 1, createdAt: expect.any(Date) as Date },
+                        ],
+                    },
                     user: { connect: { id: userId } },
                 },
             });
+        });
+
+        test("turns repeated card ids into a single entry with a count", async () => {
+            prismaMock.collection.create.mockResolvedValue(activeCollection);
+
+            await authedCaller().collection.create({ name: "Collection", cards: ["c1", "c2", "c1"] });
+
+            expect(prismaMock.collection.create).toHaveBeenCalledWith({
+                data: expect.objectContaining({
+                    cardEntries: {
+                        create: [
+                            { cardId: "c1", count: 2, createdAt: expect.any(Date) as Date },
+                            { cardId: "c2", count: 1, createdAt: expect.any(Date) as Date },
+                        ],
+                    },
+                }) as object,
+            });
+        });
+    });
+
+    describe("rename", function() {
+        test("renames a collection the caller owns, trimming whitespace", async () => {
+            const renamed = { ...activeCollection, name: "Commander Staples" };
+            prismaMock.collection.findUnique.mockResolvedValue(activeCollection);
+            prismaMock.collection.update.mockResolvedValue(renamed);
+
+            await expect(
+                authedCaller().collection.rename({ id: collectionId, name: "  Commander Staples  " })
+            ).resolves.toStrictEqual(renamed);
+
+            expect(prismaMock.collection.update).toHaveBeenCalledWith({
+                where: { id: collectionId },
+                data: { name: "Commander Staples" },
+            });
+        });
+
+        test("throws FORBIDDEN and doesn't write when caller does not own the collection", async () => {
+            prismaMock.collection.findUnique.mockResolvedValue(activeCollection);
+
+            await expect(
+                authedCaller("notowner").collection.rename({ id: collectionId, name: "Hijacked" })
+            ).rejects.toStrictEqual(
+                new TRPCError({ code: "FORBIDDEN", message: "You are not authorized to access this collection" })
+            );
+
+            expect(prismaMock.collection.update).not.toHaveBeenCalled();
+        });
+
+        test("rejects an empty name", async () => {
+            await expect(
+                authedCaller().collection.rename({ id: collectionId, name: "   " })
+            ).rejects.toBeInstanceOf(TRPCError);
+
+            expect(prismaMock.collection.update).not.toHaveBeenCalled();
+        });
+
+        test("rejects a name longer than 50 characters", async () => {
+            await expect(
+                authedCaller().collection.rename({ id: collectionId, name: "x".repeat(51) })
+            ).rejects.toBeInstanceOf(TRPCError);
+
+            expect(prismaMock.collection.update).not.toHaveBeenCalled();
         });
     });
 

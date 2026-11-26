@@ -49,17 +49,18 @@ export const env = createEnv({
       // VERCEL_URL doesn't include `https` so it cant be validated as a URL
       process.env.VERCEL ? z.string().min(1) : z.string().url()
     ),
-    // OAuth creds are required on Vercel production only. Email creds are
-    // required on any production deploy, since email is the sign-in that
-    // always works. Both stay optional in preview/dev.
+    // OAuth creds are required on Vercel production only, so the homelab
+    // deploy can sign in by email alone. They stay optional in preview/dev.
     DISCORD_CLIENT_ID: vercelProdRequired(z.string()),
     DISCORD_CLIENT_SECRET: vercelProdRequired(z.string()),
     GITHUB_ID: vercelProdRequired(z.string()),
     GITHUB_SECRET: vercelProdRequired(z.string()),
     GOOGLE_ID: vercelProdRequired(z.string()),
     GOOGLE_SECRET: vercelProdRequired(z.string()),
-    EMAIL_SERVER: prodRequired(z.string()),
-    EMAIL_FROM: prodRequired(z.string().email()),
+    // Email sign-in is optional everywhere. The magic-link provider only
+    // turns on when both are set (see src/server/auth.ts).
+    EMAIL_SERVER: z.string().optional(),
+    EMAIL_FROM: z.string().email().optional(),
   },
 
   /**
