@@ -73,3 +73,5 @@ CI runs them on every pull request against a `postgres:16` service container.
 |---|---|
 | Push to any branch | Vercel preview deployment |
 | Merge to `main` | Vercel production deployment + migrations run via GitHub Action |
+
+Self-hosted on the homelab (tailnet only, for testing before v1): see [docs/homelab.md](docs/homelab.md).

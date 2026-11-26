@@ -1,0 +1,32 @@
+# Production image for the homelab (bananajuice). See docs/homelab.md.
+# The plain Dockerfile next to this one is the local dev setup (npm run dev).
+FROM node:18.20.4-alpine
+
+# Prisma's engines need OpenSSL on Alpine.
+RUN apk add --no-cache openssl
+
+WORKDIR /app
+
+COPY package.json package-lock.json ./
+COPY prisma ./prisma
+# Dev dependencies stay installed: the container runs `prisma migrate deploy`
+# on start, and `prisma db seed` needs ts-node.
+RUN npm ci
+
+COPY . .
+
+# Env vars are checked when the server starts, not at build time, so the image
+# holds no secrets. bananajuice has 4 GB of RAM, so cap the build's heap.
+ENV SKIP_ENV_VALIDATION=true \
+    NEXT_TELEMETRY_DISABLED=1 \
+    NODE_OPTIONS=--max-old-space-size=2048
+RUN npm run build
+
+ENV NODE_ENV=production \
+    SKIP_ENV_VALIDATION= \
+    NODE_OPTIONS= \
+    PORT=3000
+EXPOSE 3000
+
+# Apply any new migrations, then serve.
+CMD ["sh", "-c", "npx prisma migrate deploy && npm start"]
