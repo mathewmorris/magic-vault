@@ -57,6 +57,14 @@ export const authOptions: NextAuthOptions = {
     DiscordProvider({
       clientId: env.DISCORD_CLIENT_ID ?? "",
       clientSecret: env.DISCORD_CLIENT_SECRET ?? "",
+      // NextAuth's default Discord button puts the blurple logo from
+      // authjs.dev on a blurple background, so the icon disappears. A white
+      // button with Discord-colored text keeps the logo visible.
+      style: {
+        logo: "/discord.svg",
+        bg: "#fff",
+        text: "#5865F2",
+      },
     }),
     GitHubProvider({
       clientId: env.GITHUB_ID ?? "",

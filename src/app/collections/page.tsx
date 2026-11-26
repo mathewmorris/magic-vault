@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { type Collection } from "@prisma/client";
+import Spinner from "~/components/Spinner";
 import { api } from "~/utils/api";
 
 const CollectionList = ({ collections }: { collections: Collection[] }) => {
@@ -22,13 +23,17 @@ const CollectionList = ({ collections }: { collections: Collection[] }) => {
 };
 
 export default function CollectionsIndex() {
-  const { data: collections } = api.collection.getAll.useQuery();
+  const { data: collections, isLoading } = api.collection.getAll.useQuery();
 
   return (
     <div>
       <Link href="collection/create">Create Collection</Link>
       <p>Your collections</p>
-      <CollectionList collections={collections ?? []} />
+      {isLoading ? (
+        <Spinner label="Loading collections" />
+      ) : (
+        <CollectionList collections={collections ?? []} />
+      )}
     </div>
   );
 }

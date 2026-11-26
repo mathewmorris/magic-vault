@@ -4,6 +4,7 @@ import Image from "next/image";
 import { useState } from "react";
 import { api } from "~/utils/api";
 import Button from "./Button";
+import Spinner from "./Spinner";
 
 interface SearchBarProps {
   onSelectedChange: (cardIds: string[]) => void;
@@ -57,7 +58,9 @@ export default function SearchBar({ onSelectedChange }: SearchBarProps) {
         }}
       />
       {isError && <div className="text-red-500">We got a problem boss...</div>}
-      {isFetching && <div>Searching for cards with names that contain &apos;{input}&apos;...</div>}
+      {isFetching && !isFetchingNextPage && (
+        <Spinner label={`Searching for cards with names that contain '${input}'`} />
+      )}
       <div className="grid grid-cols-5 gap-4">
         {searchResults?.pages?.map((page) => {
           return page.items.map(card => {
@@ -79,7 +82,7 @@ export default function SearchBar({ onSelectedChange }: SearchBarProps) {
           })
         })}
         {hasNextPage && (<Button onClick={() => void fetchNextPage()}>Next Page</Button>)}
-        {isFetchingNextPage && <div>Fetching next page...</div>}
+        {isFetchingNextPage && <Spinner label="Loading more cards" />}
       </div>
     </>
   );
