@@ -262,6 +262,24 @@ class ExecuteOperationsTest(unittest.TestCase):
         self.assertEqual(mixed_params, [('{"small": "s"}', "token", "u3")])
         self.assertFalse(any("DELETE" in sql for sql, _ in cursor.calls))
 
+    def test_insert_params_carry_gameplay_and_printing_fields(self):
+        card = fake_card("Bear", oracle_id="o-1", mana_cost="{1}{G}", cmc=2.0,
+                         type_line="Creature — Bear", set="2ed",
+                         collector_number="190", color_identity=["G"],
+                         legalities={"vintage": "legal"})
+        op = Operation(INSERT, "x", apply_diff.card_to_row("x", card))
+        by_column = dict(zip(("id",) + apply_diff.STORED_FIELDS,
+                             apply_diff.insert_params(op)))
+        self.assertEqual(by_column["oracle_id"], "o-1")
+        self.assertEqual(by_column["cmc"], 2.0)
+        self.assertEqual(by_column["set"], "2ed")
+        self.assertEqual(json.loads(by_column["color_identity"]), ["G"])
+        self.assertEqual(json.loads(by_column["legalities"]),
+                         {"vintage": "legal"})
+        self.assertIsNone(by_column["power"])
+        self.assertIn('"set" = EXCLUDED."set"', apply_diff.insert_sql())
+        self.assertIn("%s::jsonb", apply_diff.insert_sql())
+
     def test_insert_params_serialize_json_and_keep_nulls(self):
         params = apply_diff.insert_params(insert_op("x"))
         columns = ("id",) + apply_diff.STORED_FIELDS

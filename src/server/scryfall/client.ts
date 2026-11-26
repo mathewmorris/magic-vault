@@ -45,6 +45,27 @@ export interface ScryfallCard {
   image_uris?: Record<string, string> | null;
   card_faces?: unknown[] | null;
   all_parts?: unknown[] | null;
+  oracle_id?: string | null;
+  mana_cost?: string | null;
+  cmc?: number | null;
+  type_line?: string | null;
+  oracle_text?: string | null;
+  power?: string | null;
+  toughness?: string | null;
+  loyalty?: string | null;
+  colors?: string[] | null;
+  color_identity?: string[] | null;
+  keywords?: string[] | null;
+  set?: string | null;
+  set_name?: string | null;
+  collector_number?: string | null;
+  rarity?: string | null;
+  artist?: string | null;
+  flavor_text?: string | null;
+  released_at?: string | null;
+  legalities?: Record<string, string> | null;
+  finishes?: string[] | null;
+  lang?: string | null;
 }
 
 interface ScryfallList {

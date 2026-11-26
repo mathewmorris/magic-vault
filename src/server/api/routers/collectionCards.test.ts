@@ -2,7 +2,8 @@ import prismaMock from "singleton";
 import { createInnerTRPCContext } from "../trpc";
 import { appRouter } from "../root";
 import { TRPCError } from "@trpc/server";
-import { type Card, type CardsOnCollections, type Collection } from "@prisma/client";
+import { type CardsOnCollections, type Collection } from "@prisma/client";
+import { buildCard } from "../../testing/cardFixture";
 import { toCardEntries } from "./collection";
 
 describe("collection card procedures", () => {
@@ -10,18 +11,6 @@ describe("collection card procedures", () => {
     const collectionId = "collection456";
     const dateNow = new Date();
     let collection: Collection;
-
-    const buildCard = (overrides: Partial<Card> = {}): Card => ({
-        id: "card-1",
-        name: "Black Lotus",
-        scryfall_uri: "https://scryfall.com/card/black-lotus",
-        image_status: "highres_scan",
-        image_uris: null,
-        card_faces: null,
-        all_parts: null,
-        layout: "normal",
-        ...overrides,
-    });
 
     const buildEntry = (overrides: Partial<CardsOnCollections> = {}): CardsOnCollections => ({
         collectionId,
