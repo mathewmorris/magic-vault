@@ -107,6 +107,26 @@ describe("collection procedures", () => {
                 where: { id: collectionId },
             });
         });
+
+        test("throws NOT_FOUND when the collection belongs to someone else", async () => {
+            prismaMock.collection.findUnique.mockResolvedValue(activeCollection);
+
+            await expect(
+                authedCaller("notowner").collection.byId({ id: collectionId })
+            ).rejects.toStrictEqual(
+                new TRPCError({ code: "NOT_FOUND", message: "Collection not found" })
+            );
+        });
+
+        test("throws NOT_FOUND when the collection doesn't exist", async () => {
+            prismaMock.collection.findUnique.mockResolvedValue(null);
+
+            await expect(
+                authedCaller().collection.byId({ id: "missing" })
+            ).rejects.toStrictEqual(
+                new TRPCError({ code: "NOT_FOUND", message: "Collection not found" })
+            );
+        });
     });
 
     describe("create", function() {
@@ -130,6 +150,7 @@ describe("collection procedures", () => {
     describe("update", function() {
         test("updates name and cards on the collection", async () => {
             const renamed = { ...activeCollection, name: "Renamed", cards: ["x"] };
+            prismaMock.collection.findUnique.mockResolvedValue(activeCollection);
             prismaMock.collection.update.mockResolvedValue(renamed);
 
             await expect(
@@ -140,6 +161,18 @@ describe("collection procedures", () => {
                 where: { id: collectionId },
                 data: { name: "Renamed", cards: ["x"] },
             });
+        });
+
+        test("throws FORBIDDEN and doesn't write when caller does not own the collection", async () => {
+            prismaMock.collection.findUnique.mockResolvedValue(activeCollection);
+
+            await expect(
+                authedCaller("notowner").collection.update({ id: collectionId, name: "Hijacked" })
+            ).rejects.toStrictEqual(
+                new TRPCError({ code: "FORBIDDEN", message: "You are not authorized to access this collection" })
+            );
+
+            expect(prismaMock.collection.update).not.toHaveBeenCalled();
         });
     });
 

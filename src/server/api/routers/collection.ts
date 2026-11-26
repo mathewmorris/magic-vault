@@ -1,3 +1,4 @@
+import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { sub } from 'date-fns/sub';
 import { isBefore } from 'date-fns/isBefore';
@@ -32,12 +33,23 @@ export const collectionRouter = createTRPCRouter({
 
   byId: protectedProcedure
     .input(z.object({ id: z.string() }))
-    .query(({ ctx, input }) => {
-      return ctx.prisma.collection.findUnique({
+    .query(async ({ ctx, input }) => {
+      const collection = await ctx.prisma.collection.findUnique({
         where: {
           id: input.id
         }
       });
+
+      // Someone else's collection looks exactly like a missing one, so ids
+      // can't be probed to find out which collections exist.
+      if (!collection || collection.userId !== ctx.session.user.id) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Collection not found",
+        });
+      }
+
+      return collection;
     }),
 
   create: protectedProcedure.input(z.object({ name: z.string(), cards: z.string().array() }))
@@ -60,6 +72,8 @@ export const collectionRouter = createTRPCRouter({
 
   update: protectedProcedure.input(z.object({ id: z.string(), name: z.string().optional(), cards: z.string().array().optional() }))
     .mutation(async ({ ctx, input }) => {
+      await verifyCollectionOwnership(ctx.prisma, ctx.session.user.id, input.id)
+
       const collection = await ctx.prisma.collection.update({
         where: {
           id: input.id,
