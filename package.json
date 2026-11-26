@@ -13,6 +13,7 @@
     "start": "next start",
     "test": "SKIP_ENV_VALIDATION=true jest",
     "test:debug": "SKIP_ENV_VALIDATION=true jest --watch",
+    "test:integration": "SKIP_ENV_VALIDATION=true jest --config jest.integration.config.ts",
     "test:e2e": "playwright test",
     "vercel:env": "vercel env pull",
     "vercel:link": "vercel link",

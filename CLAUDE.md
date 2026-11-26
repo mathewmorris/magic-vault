@@ -99,7 +99,8 @@ prisma/
 ### Testing
 - Colocate tests: `Component.test.ts` next to `Component.ts`
 - Follow Arrange-Act-Assert pattern
-- Mock Prisma using `jest-mock-extended`
+- Mock Prisma using `jest-mock-extended` in unit tests
+- Put DB-backed tRPC tests in `*.integration.test.ts` (run with `npm run test:integration`, see README "Testing")
 
 ### Database
 - Soft delete pattern: `deletedAt` field (null = active)

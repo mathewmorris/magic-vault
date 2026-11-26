@@ -35,10 +35,29 @@ App runs at `http://localhost:3000`. Mailcatcher (magic link emails) at `http://
 | `npm run rebuild-frontend` | Rebuild Next.js container only |
 | `npm test` | Run unit tests |
 | `npm run test:debug` | Run tests in watch mode |
+| `npm run test:integration` | Run integration tests against a real Postgres database |
 | `npm run test:e2e` | Run Playwright e2e tests |
 | `npm run db:migrate` | Run Prisma migrations |
 | `npm run db:push` | Push schema changes without migrations |
 | `npm run studio` | Open Prisma Studio |
+
+## Testing
+
+There are two kinds of Jest tests, and they run separately:
+
+- **Unit tests** (`*.test.ts`, `npm test`) mock Prisma with `jest-mock-extended` (see `singleton.ts`), so they need no database.
+- **Integration tests** (`*.integration.test.ts`, `npm run test:integration`) call the real tRPC procedures with the real Prisma client against Postgres. Setup runs `prisma migrate deploy` once and truncates every table before each test.
+
+**Which one to write?** If the thing you care about is decided by the database, write an integration test. That covers anything in a Prisma `where`, `select` or relation (scoping to the current user, filtering out soft-deleted rows, date cutoffs), plus constraints and cascades. A mocked Prisma just returns whatever the test tells it to, so a unit test there only proves you passed the arguments you expected, not that the right rows come back. Write a unit test for logic that lives in our own code (input validation, branching, error mapping, pure helpers like `src/utils/scan`), or when you want to check that a failure path never reaches the database. A good rule of thumb for tRPC routers: one integration test per behavior a user would notice, and unit tests for the edge cases that are awkward to set up with real data.
+
+To run integration tests locally, point `DATABASE_URL` at a throwaway local database. The suite refuses to run unless the host is `localhost` and the database name contains `test`, since it wipes the tables:
+
+```bash
+createdb magicvault_test   # or use the docker compose db on localhost:5432
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/magicvault_test npm run test:integration
+```
+
+CI runs them on every pull request against a `postgres:16` service container.
 
 ## Deployment
 

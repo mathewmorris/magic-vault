@@ -10,7 +10,8 @@ const config: Config = {
   preset: 'ts-jest',
   testEnvironment: 'node',
   roots: ['<rootDir>'],
-  testPathIgnorePatterns: ['/node_modules/', '/.next/', '/e2e/'],
+  // Integration tests need a real database; run them with `npm run test:integration`.
+  testPathIgnorePatterns: ['/node_modules/', '/.next/', '/e2e/', '\\.integration\\.test\\.ts$'],
   moduleNameMapper: {
     "^singleton$": "<rootDir>/singleton.ts"
   },
