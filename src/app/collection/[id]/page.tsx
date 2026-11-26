@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import Button from "~/components/Button";
 import CollectionCards from "~/components/CollectionCards";
@@ -195,7 +196,15 @@ export default function Page() {
 
       {!isDeleted && (
         <section className="flex flex-col gap-4">
-          <h2 className="text-xl">Add cards</h2>
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <h2 className="text-xl">Add cards</h2>
+            <Link
+              href={`/scan?collection=${encodeURIComponent(collection.id)}`}
+              className="rounded-full px-4 py-2 font-semibold transition dark:bg-purple-950 dark:hover:bg-pink-800 dark:hover:drop-shadow-glow dark:focus:bg-pink-800"
+            >
+              Scan cards
+            </Link>
+          </div>
           <SearchBar
             onAddCard={(cardId) => addCard.mutate({ collectionId: collection.id, cardId })}
           />
