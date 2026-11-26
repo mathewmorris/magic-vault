@@ -6,10 +6,16 @@ import { api } from "~/utils/api";
 import Button from "./Button";
 
 interface SearchBarProps {
-  onSelectedChange: (cardIds: string[]) => void;
+  onSelectedChange?: (cardIds: string[]) => void;
+  /**
+   * When set, each result gets an "Add Card" button that calls this every time
+   * it's pressed (so the same card can be added more than once) instead of the
+   * select/deselect toggle.
+   */
+  onAddCard?: (cardId: string) => void;
 }
 
-export default function SearchBar({ onSelectedChange }: SearchBarProps) {
+export default function SearchBar({ onSelectedChange, onAddCard }: SearchBarProps) {
   const [input, setInput] = useState('');
   const [selectedCards, setSelectedCards] = useState<string[]>([]);
 
@@ -33,13 +39,13 @@ export default function SearchBar({ onSelectedChange }: SearchBarProps) {
 
   function addCard(cardId: string) {
     const updated = [...selectedCards, cardId];
-    onSelectedChange(updated);
+    onSelectedChange?.(updated);
     setSelectedCards(updated);
   }
 
   function removeCard(cardId: string) {
     const updated = selectedCards.filter(card => card !== cardId);
-    onSelectedChange(updated);
+    onSelectedChange?.(updated);
     setSelectedCards(updated);
   }
 
@@ -70,7 +76,9 @@ export default function SearchBar({ onSelectedChange }: SearchBarProps) {
                 >
                   {images?.small && <Image src={images.small} width={146} height={204} alt={card.name} className="m-2 rounded-lg" />}
                 </div>
-                {selectedCards.includes(card.id) ?
+                {onAddCard ?
+                  <Button type="button" onClick={() => onAddCard(card.id)}>Add Card</Button> :
+                  selectedCards.includes(card.id) ?
                   <Button type="button" onClick={() => removeCard(card.id)}>Remove Card</Button> :
                   <Button type="button" onClick={() => addCard(card.id)}>Add Card</Button>
                 }
