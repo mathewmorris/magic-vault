@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { type RouterOutputs } from "~/utils/api";
 import { smallImageUrl } from "~/utils/cardImage";
 import {
@@ -63,7 +64,9 @@ export default function CollectionCards({
                 {card.name}
               </div>
             )}
-            <p className="text-center">{card.name}</p>
+            <Link href={`/card/${card.id}`} className="text-center underline">
+              {card.name}
+            </Link>
             {editable && options.length > 1 ? (
               <label className="flex items-center gap-2 text-sm">
                 <span className="sr-only">Finish for {card.name}</span>

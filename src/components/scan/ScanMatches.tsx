@@ -92,6 +92,12 @@ export default function ScanMatches({
         })}
       </ul>
 
+      {selected && (
+        <Link href={`/card/${selected.id}`} className="text-sm underline">
+          View {selected.name}&apos;s card page
+        </Link>
+      )}
+
       {auth === "signed-out" && (
         <p className="rounded-lg border border-purple-700 p-4">
           <Link href={signInUrl} className="font-semibold underline">

@@ -1,3 +1,4 @@
+import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
 import {
@@ -5,9 +6,74 @@ import {
     publicProcedure,
 } from "~/server/api/trpc";
 import { cacheScryfallCards } from "~/server/scryfall/cacheCards";
-import { isScryfallFallbackEnabled, scryfall } from "~/server/scryfall/client";
+import {
+    isScryfallFallbackEnabled,
+    isScryfallId,
+    scryfall,
+    type ScryfallRuling,
+} from "~/server/scryfall/client";
+
+/** How many other printings the card page lists. */
+export const PRINTINGS_LIMIT = 60;
+
+/** The columns the card page's printings list reads. */
+export const printingSelect = {
+    id: true,
+    name: true,
+    set: true,
+    set_name: true,
+    collector_number: true,
+    rarity: true,
+    released_at: true,
+    image_uris: true,
+    card_faces: true,
+} as const;
 
 export const cardRouter = createTRPCRouter({
+    byId: publicProcedure
+        .meta({ description: "One card with its other printings, for the card page." })
+        .input(z.object({ id: z.string().min(1) }))
+        .query(async ({ ctx, input }) => {
+            const card = await ctx.prisma.card.findUnique({ where: { id: input.id } });
+            if (!card) {
+                throw new TRPCError({ code: "NOT_FOUND", message: "Card not found" });
+            }
+
+            // Rows synced before oracle_id existed can't be matched up, so
+            // they just show no other printings.
+            const found = card.oracle_id
+                ? await ctx.prisma.card.findMany({
+                    where: { oracle_id: card.oracle_id, id: { not: card.id } },
+                    select: printingSelect,
+                    orderBy: [{ released_at: { sort: "desc", nulls: "last" } }, { id: "asc" }],
+                    take: PRINTINGS_LIMIT + 1, // one extra tells us there are more
+                })
+                : [];
+
+            return {
+                ...card,
+                printings: found.slice(0, PRINTINGS_LIMIT),
+                hasMorePrintings: found.length > PRINTINGS_LIMIT,
+            };
+        }),
+    rulings: publicProcedure
+        .meta({ description: "A card's rulings, fetched from Scryfall when asked for." })
+        .input(z.object({ id: z.string().max(64) }))
+        .query(async ({ input }): Promise<ScryfallRuling[]> => {
+            if (!isScryfallId(input.id) || !isScryfallFallbackEnabled()) return [];
+
+            try {
+                const outcome = await scryfall.getRulings(input.id);
+                if (outcome.status === "ok") return outcome.rulings;
+                if (outcome.status === "error") {
+                    console.warn("Scryfall rulings fetch failed:", outcome.message);
+                }
+            } catch (err) {
+                console.error("Scryfall rulings fetch failed", err);
+            }
+            // Rulings are extra; the card page still works without them.
+            return [];
+        }),
     findMany: publicProcedure.input(z.object({ cardIds: z.string().array() })).query(async ({ ctx, input }) => {
         const cards = await ctx.prisma.card.findMany({
             where: {
