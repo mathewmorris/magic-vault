@@ -5,7 +5,9 @@ import Button from "~/components/Button";
 import CollectionCards from "~/components/CollectionCards";
 import CollectionName from "~/components/CollectionName";
 import SearchBar from "~/components/SearchBar";
+import { useToast } from "~/components/toast";
 import { api } from "~/utils/api";
+import { collectionLabel, mutationErrorMessage } from "~/utils/toastMessages";
 
 const NO_RETRY_CODES = ["NOT_FOUND", "FORBIDDEN", "UNAUTHORIZED", "BAD_REQUEST"];
 
@@ -20,6 +22,7 @@ export default function Page() {
   const params = useParams<{ id: string }>();
   const id = params?.id ?? "";
   const utils = api.useUtils();
+  const toast = useToast();
 
   // Both queries are keyed on the id from the URL rather than on each other's
   // results, so they start together on a reload or a client-side navigation,
@@ -89,16 +92,39 @@ export default function Page() {
   });
 
   // Wait for the change to land and the lists to refresh before leaving, so
-  // the page we go back to doesn't show stale collections.
-  const afterLifecycleChange = {
-    onSuccess: async () => {
-      await refreshCollectionLists();
-      router.back();
-    },
-  };
-  const softDelete = api.collection.softDelete.useMutation(afterLifecycleChange);
-  const recover = api.collection.recover.useMutation(afterLifecycleChange);
-  const destroy = api.collection.destroy.useMutation(afterLifecycleChange);
+  // the page we go back to doesn't show stale collections. Callbacks live on
+  // useMutation (not on mutate) so they still run after router.back()
+  // unmounts this page, and the toast shows on the page we land on.
+  function afterLifecycleChange(
+    successMessage: (name: string | null) => string,
+    action: string,
+  ) {
+    return {
+      onSuccess: async (changed: { name: string | null }) => {
+        toast.success(successMessage(changed.name));
+        await refreshCollectionLists();
+        router.back();
+      },
+      onError: (error: unknown) => {
+        toast.error(mutationErrorMessage(action, error));
+      },
+    };
+  }
+  const softDelete = api.collection.softDelete.useMutation(
+    afterLifecycleChange(
+      (name) => `Deleted ${collectionLabel(name)}. You can recover it from Deleted Collections.`,
+      "delete this collection",
+    ),
+  );
+  const recover = api.collection.recover.useMutation(
+    afterLifecycleChange((name) => `Recovered ${collectionLabel(name)}.`, "recover this collection"),
+  );
+  const destroy = api.collection.destroy.useMutation(
+    afterLifecycleChange(
+      (name) => `Permanently deleted ${collectionLabel(name)}.`,
+      "permanently delete this collection",
+    ),
+  );
 
   if (collectionQuery.isError) {
     const notFound = collectionQuery.error?.data?.code === "NOT_FOUND";
@@ -123,9 +149,9 @@ export default function Page() {
 
   const isDeleted = collection.deletedAt != null;
   const lifecyclePending = softDelete.isLoading || recover.isLoading || destroy.isLoading;
-  // Rename errors show next to the name field, so they aren't repeated here.
-  const actionError =
-    addCard.error ?? removeCard.error ?? softDelete.error ?? recover.error ?? destroy.error;
+  // Rename errors show next to the name field, and delete, recover and
+  // permanent delete errors show as toasts, so they aren't repeated here.
+  const actionError = addCard.error ?? removeCard.error;
 
   return (
     <div className="flex flex-col gap-6 p-4">

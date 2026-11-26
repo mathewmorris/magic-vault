@@ -7,6 +7,15 @@ export default {
       dropShadow: {
         glow: '0 0 4px #fa0aa9'
       },
+      keyframes: {
+        'toast-in': {
+          from: { opacity: '0', transform: 'translateY(0.5rem)' },
+          to: { opacity: '1', transform: 'translateY(0)' },
+        },
+      },
+      animation: {
+        'toast-in': 'toast-in 150ms ease-out',
+      },
       container: {
         padding: {
           DEFAULT: '1rem',

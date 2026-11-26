@@ -7,6 +7,7 @@ import { SessionProvider } from "next-auth/react";
 import { type Session } from "next-auth";
 import superjson from "superjson";
 
+import { ToastProvider } from "~/components/toast";
 import { api } from "~/utils/api";
 
 const getBaseUrl = () => {
@@ -40,7 +41,9 @@ export function Providers({
   return (
     <SessionProvider session={session}>
       <api.Provider client={trpcClient} queryClient={queryClient}>
-        <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+        <QueryClientProvider client={queryClient}>
+          <ToastProvider>{children}</ToastProvider>
+        </QueryClientProvider>
       </api.Provider>
     </SessionProvider>
   );
