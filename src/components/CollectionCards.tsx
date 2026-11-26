@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { type RouterOutputs } from "~/utils/api";
 import { smallImageUrl } from "~/utils/cardImage";
+import { conditionLabel, languageLabel } from "~/utils/import/values";
 import {
   cardFinishes,
   finishLabel,
@@ -41,7 +42,7 @@ export default function CollectionCards({
 
   return (
     <ul className="grid grid-cols-2 gap-4 md:grid-cols-4 lg:grid-cols-5">
-      {cards.map(({ card, finish: storedFinish, count }) => {
+      {cards.map(({ card, finish: storedFinish, condition, language, count }) => {
         const image = smallImageUrl(card);
         // The API only ever stores one of the known finishes.
         const finish: Finish = isFinish(storedFinish) ? storedFinish : "nonfoil";
@@ -88,6 +89,13 @@ export default function CollectionCards({
               </label>
             ) : (
               <p className="text-sm text-gray-400">{finishLabel(finish)}</p>
+            )}
+            {(condition !== "NM" || language !== "en") && (
+              <p className="text-sm text-gray-400">
+                {[condition !== "NM" && conditionLabel(condition), language !== "en" && languageLabel(language)]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </p>
             )}
             <p className="text-sm" aria-label={`${label} price`}>
               {price === null ? (

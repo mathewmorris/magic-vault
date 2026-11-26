@@ -1,3 +1,4 @@
+import { type Prisma } from "@prisma/client";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { sub } from 'date-fns/sub';
@@ -9,6 +10,24 @@ import {
   protectedProcedure,
 } from "~/server/api/trpc";
 import { verifyCollectionOwnership } from "~/server/api/util";
+import { importUpsertSql, matchImportRows, smallImage } from "~/server/collectionImport";
+import {
+  CONDITIONS,
+  IMPORT_FORMAT_CHOICES,
+  ImportParseError,
+  MAX_IMPORT_ROWS,
+  MAX_IMPORT_TEXT_LENGTH,
+  MAX_ROW_QUANTITY,
+  parseImport,
+  type ParsedImport,
+} from "~/utils/import";
+import { mergeImportEntries } from "~/utils/import/entries";
+import {
+  EXPORT_FORMATS,
+  exportFilename,
+  toCsvExport,
+  toTextExport,
+} from "~/utils/import/export";
 import {
   cardFinishes,
   collectionValue,
@@ -25,6 +44,14 @@ const collectionName = z
 
 // Matches FINISHES in ~/utils/price.
 const cardFinish = z.enum(["nonfoil", "foil", "etched"]);
+
+// Entries are read oldest first; ties (rows created in the same millisecond)
+// fall back to card id, then finish, so the order never shuffles.
+const entryOrder = [
+  { createdAt: "asc" },
+  { cardId: "asc" },
+  { finish: "asc" },
+] satisfies Prisma.CardsOnCollectionsOrderByWithRelationInput[];
 
 function assertCardHasFinish(finishes: unknown, finish: string) {
   const known = cardFinishes(finishes);
@@ -200,9 +227,8 @@ export const collectionRouter = createTRPCRouter({
       })
     }),
 
-  // Cards in a collection with their finish and count, oldest first. Ties
-  // (rows created in the same millisecond) fall back to card id, then finish,
-  // so the order never shuffles.
+  // Cards in a collection with their finish, condition, language and count,
+  // in entryOrder.
   cards: protectedProcedure
     .input(z.object({ collectionId: z.string() }))
     .query(async ({ ctx, input }) => {
@@ -212,11 +238,7 @@ export const collectionRouter = createTRPCRouter({
         where: {
           collectionId: collection.id,
         },
-        orderBy: [
-          { createdAt: "asc" },
-          { cardId: "asc" },
-          { finish: "asc" },
-        ],
+        orderBy: entryOrder,
       })
 
       if (entries.length === 0) {
@@ -230,10 +252,171 @@ export const collectionRouter = createTRPCRouter({
       })
       const cardsById = new Map(cards.map(card => [card.id, card]));
 
-      return entries.flatMap(({ cardId, finish, count }) => {
+      return entries.flatMap(({ cardId, finish, condition, language, count }) => {
         const card = cardsById.get(cardId);
-        return card ? [{ card, finish, count }] : [];
+        return card ? [{ card, finish, condition, language, count }] : [];
       });
+    }),
+
+  // Reads a pasted list or CSV and matches each line to a card, without
+  // changing anything. A mutation rather than a query so the text goes in
+  // the request body, not the URL. Lines that couldn't be read or matched
+  // come back in `unmatched` with the reason, in line order.
+  previewImport: protectedProcedure
+    .input(z.object({
+      collectionId: z.string(),
+      text: z.string().max(MAX_IMPORT_TEXT_LENGTH, "That's too much text for one import (the limit is about 1 MB)"),
+      format: z.enum(IMPORT_FORMAT_CHOICES).default("auto"),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      await verifyCollectionOwnership(ctx.prisma, ctx.session.user.id, input.collectionId)
+
+      let parsed: ParsedImport;
+      try {
+        parsed = parseImport(input.text, input.format);
+      } catch (error) {
+        if (error instanceof ImportParseError) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
+        }
+        throw error;
+      }
+
+      if (parsed.rows.length > MAX_IMPORT_ROWS) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: `That's ${parsed.rows.length} lines; one import can take up to ${MAX_IMPORT_ROWS}. Split it into smaller imports.`,
+        });
+      }
+
+      const result = await matchImportRows(ctx.prisma, parsed.rows);
+
+      const matched = result.matched.map(({ row, card, finish, matchedBy, note }) => ({
+        lineNumber: row.lineNumber,
+        raw: row.raw,
+        quantity: row.quantity,
+        finish,
+        condition: row.condition,
+        language: row.language,
+        matchedBy,
+        note: note ?? null,
+        card: {
+          id: card.id,
+          name: card.name,
+          set: card.set,
+          setName: card.set_name,
+          collectorNumber: card.collector_number,
+          image: smallImage(card),
+          scryfallUri: card.scryfall_uri,
+        },
+      }));
+
+      const unmatched = [
+        ...parsed.errors.map(({ lineNumber, raw, message }) => ({ lineNumber, raw, reason: message })),
+        ...result.unmatched.map(({ row, reason }) => ({ lineNumber: row.lineNumber, raw: row.raw, reason })),
+      ].sort((a, b) => a.lineNumber - b.lineNumber);
+
+      return { format: parsed.format, matched, unmatched };
+    }),
+
+  // Adds the rows a preview matched (and the user kept) to a collection in
+  // one transaction. Counts add on to what's already there; an entry that's
+  // already there keeps its condition and language. With `replace`, every
+  // entry in the collection is removed first.
+  applyImport: protectedProcedure
+    .input(z.object({
+      collectionId: z.string(),
+      rows: z.array(z.object({
+        cardId: z.string().min(1),
+        finish: cardFinish,
+        condition: z.enum(CONDITIONS),
+        language: z.string().regex(/^[a-z]{2,3}$/),
+        quantity: z.number().int().min(1).max(MAX_ROW_QUANTITY),
+      })).min(1).max(MAX_IMPORT_ROWS),
+      replace: z.boolean().default(false),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const collection = await verifyCollectionOwnership(ctx.prisma, ctx.session.user.id, input.collectionId)
+
+      const entries = mergeImportEntries(input.rows);
+      const cardIds = Array.from(new Set(entries.map((entry) => entry.cardId)));
+      const cards = await ctx.prisma.card.findMany({
+        where: {
+          id: { in: cardIds },
+        },
+        select: {
+          id: true,
+          finishes: true,
+        },
+      })
+      const finishesById = new Map(cards.map((card) => [card.id, card.finishes]));
+
+      const missing = cardIds.filter((cardId) => !finishesById.has(cardId));
+      if (missing.length > 0) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: missing.length === 1
+            ? "A card in this import wasn't found. Preview the import again."
+            : `${missing.length} cards in this import weren't found. Preview the import again.`,
+        });
+      }
+
+      for (const entry of entries) {
+        assertCardHasFinish(finishesById.get(entry.cardId), entry.finish);
+      }
+
+      const writes: Prisma.PrismaPromise<unknown>[] = [];
+      if (input.replace) {
+        writes.push(ctx.prisma.cardsOnCollections.deleteMany({ where: { collectionId: collection.id } }));
+      }
+      writes.push(ctx.prisma.$executeRaw(importUpsertSql(collection.id, entries)));
+      await ctx.prisma.$transaction(writes);
+
+      return {
+        entries: entries.length,
+        cards: entries.reduce((total, entry) => total + entry.quantity, 0),
+      };
+    }),
+
+  // The collection as a file: a Moxfield-style CSV or a plain text list.
+  // Entries whose card no longer exists are left out, as in `cards`.
+  exportCsv: protectedProcedure
+    .input(z.object({
+      collectionId: z.string(),
+      format: z.enum(EXPORT_FORMATS).default("csv"),
+    }))
+    .query(async ({ ctx, input }) => {
+      const collection = await verifyCollectionOwnership(ctx.prisma, ctx.session.user.id, input.collectionId)
+
+      const entries = await ctx.prisma.cardsOnCollections.findMany({
+        where: {
+          collectionId: collection.id,
+        },
+        orderBy: entryOrder,
+      })
+
+      const cards = entries.length === 0 ? [] : await ctx.prisma.card.findMany({
+        where: {
+          id: { in: Array.from(new Set(entries.map((entry) => entry.cardId))) },
+        },
+        select: {
+          id: true,
+          name: true,
+          set: true,
+          collector_number: true,
+        },
+      })
+      const cardsById = new Map(cards.map((card) => [card.id, card]));
+
+      const rows = entries.flatMap(({ cardId, finish, condition, language, count }) => {
+        const card = cardsById.get(cardId);
+        return card ? [{ card, finish, condition, language, count }] : [];
+      });
+
+      return {
+        format: input.format,
+        filename: exportFilename(collection.name, input.format),
+        text: input.format === "csv" ? toCsvExport(rows) : toTextExport(rows),
+      };
     }),
 
   // Adds one copy in `finish`. Without a finish it's non-foil, or the card's
@@ -371,6 +554,8 @@ export const collectionRouter = createTRPCRouter({
             cardId: input.cardId,
             finish: input.to,
             count: moved.count,
+            condition: moved.condition,
+            language: moved.language,
             createdAt: moved.createdAt,
           },
           update: {
