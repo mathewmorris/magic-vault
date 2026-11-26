@@ -1,20 +1,20 @@
-"use client";
+import Dashboard from "~/components/home/Dashboard";
+import Landing from "~/components/home/Landing";
+import { getServerAuthSession } from "~/server/auth";
+import { prisma } from "~/server/db";
+import { getCardCount, getFeaturedCards } from "~/server/featuredCards";
 
-import { useSession } from "next-auth/react";
-import Link from "next/link";
+export default async function Home() {
+  const session = await getServerAuthSession();
 
-export default function Home() {
-  const { data: sessionData } = useSession();
+  if (session) {
+    return <Dashboard name={session.user.name} />;
+  }
 
-  return (
-    <div className="container mx-auto grid justify-items-stretch">
-      <h1 className="text-5xl flex-row justify-self-center py-4">Magic Vault</h1>
-      {sessionData && (
-        <div>
-          <Link href="/collections">Your Collections</Link>
-          <Link href="/collections/deleted">Your Deleted Collections</Link>
-        </div>
-      )}
-    </div>
-  );
+  const [featuredCards, cardCount] = await Promise.all([
+    getFeaturedCards(prisma),
+    getCardCount(prisma),
+  ]);
+
+  return <Landing featuredCards={featuredCards} cardCount={cardCount} />;
 }
