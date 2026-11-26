@@ -7,6 +7,19 @@ image it has indexed and returns the closest cards. It's behind the
 `aiScan` feature flag (`NEXT_PUBLIC_FEATURE_AI_SCAN`, see
 `src/utils/featureFlags.ts`).
 
+A second flag, `aiScanDebug` (`NEXT_PUBLIC_FEATURE_AI_SCAN_DEBUG`), turns on
+the scanner's debug view: the detector's raw corners labeled TL/TR/BR/BL, which
+detector found them (pose, opencv or guide) and its score, live over the
+camera, plus a panel after each capture with the flattened card, OCR output
+and top server matches. Both flags are read at build time.
+
+The model files load from Hugging Face, pinned to a commit
+(`EMBED_REVISION` and `POSE_REVISION` in `model.ts`). The ONNX Runtime wasm
+loads from jsDelivr. Both can be self-hosted later; the model URLs can be
+overridden with `NEXT_PUBLIC_SCAN_EMBED_MODEL_URL` and
+`NEXT_PUBLIC_SCAN_POSE_MODEL_URL`. OpenCV is the fallback detector and only
+loads if the pose model fails.
+
 This page covers the server side.
 
 ## Pieces
@@ -81,7 +94,8 @@ them to compare options, not as the real hit rate.
 
 ## When to bump `EMBED_MODEL.id`
 
-Bump it whenever the vectors would change: a different model file, a
+Bump it whenever the vectors would change: a different model file
+(including moving `EMBED_REVISION` to a commit with new weights), a
 different normalization or layout, different input size, or a change to
 `preprocess.ts` that changes pixels. The id is stored on every row, so the
 indexer then builds a fresh set and the server only matches the new one.

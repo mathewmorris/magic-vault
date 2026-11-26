@@ -30,3 +30,22 @@ describe("isFeatureEnabled", () => {
     expect(flagEnvName("aiScan")).toBe("NEXT_PUBLIC_FEATURE_AI_SCAN");
   });
 });
+
+describe("aiScanDebug", () => {
+  const original = process.env.NEXT_PUBLIC_FEATURE_AI_SCAN_DEBUG;
+  afterEach(() => {
+    if (original === undefined) delete process.env.NEXT_PUBLIC_FEATURE_AI_SCAN_DEBUG;
+    else process.env.NEXT_PUBLIC_FEATURE_AI_SCAN_DEBUG = original;
+  });
+
+  it("is off by default and separate from aiScan", () => {
+    delete process.env.NEXT_PUBLIC_FEATURE_AI_SCAN_DEBUG;
+    expect(isFeatureEnabled("aiScanDebug")).toBe(false);
+  });
+
+  it("reads its own env variable", () => {
+    process.env.NEXT_PUBLIC_FEATURE_AI_SCAN_DEBUG = "on";
+    expect(isFeatureEnabled("aiScanDebug")).toBe(true);
+    expect(flagEnvName("aiScanDebug")).toBe("NEXT_PUBLIC_FEATURE_AI_SCAN_DEBUG");
+  });
+});

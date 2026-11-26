@@ -37,6 +37,7 @@ Pulled from Vercel with `npm run vercel:env`. See [.env.example](./.env.example)
 | `TCGPLAYER_AFFILIATE_URL` | No | TCGplayer tracking link from Impact (must be `https://`), like `https://partner.tcgplayer.com/c/<account>/<ad>/21018`. The product page goes on the end as `?u=`. Used only while `AFFILIATE_LINKS=on`. |
 | `CARDKINGDOM_PARTNER_ID` | No | Card Kingdom partner ID, sent as `?partner=`. Used only while `AFFILIATE_LINKS=on`. |
 | `NEXT_PUBLIC_FEATURE_AI_SCAN` | No | `on` or `off` (default `off`). Turns the AI scanner on /scan on or off. While off, /scan uses title OCR and the scan API answers 404. Read at build time, so redeploy after changing it. Setup: [docs/card-recognition.md](docs/card-recognition.md). |
+| `NEXT_PUBLIC_FEATURE_AI_SCAN_DEBUG` | No | `on` or `off` (default `off`). Shows the AI scanner's debug view: raw corners, detector and score over the camera, and what was matched after each capture. Read at build time. |
 
 ## Scripts
 

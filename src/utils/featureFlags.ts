@@ -13,6 +13,8 @@
 const FLAG_ENV = {
   /** AI card recognition on /scan (camera -> card detection -> image embedding match). */
   aiScan: "NEXT_PUBLIC_FEATURE_AI_SCAN",
+  /** Debug view for the AI scanner: raw corners, detector and score live, plus what was matched. */
+  aiScanDebug: "NEXT_PUBLIC_FEATURE_AI_SCAN_DEBUG",
 } as const;
 
 export type FeatureFlag = keyof typeof FLAG_ENV;
@@ -28,6 +30,7 @@ export function parseFlag(value: string | undefined | null): boolean {
 function rawFlagValues(): Record<FeatureFlag, string | undefined> {
   return {
     aiScan: process.env.NEXT_PUBLIC_FEATURE_AI_SCAN,
+    aiScanDebug: process.env.NEXT_PUBLIC_FEATURE_AI_SCAN_DEBUG,
   };
 }
 

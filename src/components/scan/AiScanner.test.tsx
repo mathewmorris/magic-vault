@@ -1,7 +1,7 @@
 /**
  * @jest-environment jsdom
  */
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { useEffect, useState } from "react";
 
 import type { ScanCard } from "~/server/api/routers/scan";
@@ -153,7 +153,13 @@ const readyStatus: StatusResult = {
 
 const mockAdd = jest.fn();
 
-function Harness({ onUnavailable = jest.fn() }: { onUnavailable?: (notice: string) => void }) {
+function Harness({
+  onUnavailable = jest.fn(),
+  debug,
+}: {
+  onUnavailable?: (notice: string) => void;
+  debug?: boolean;
+}) {
   const [addedName, setAddedName] = useState<string | null>(null);
   const scan = {
     auth: "signed-in",
@@ -168,7 +174,7 @@ function Harness({ onUnavailable = jest.fn() }: { onUnavailable?: (notice: strin
     },
     clearAdded: () => setAddedName(null),
   } as unknown as ScanCollection;
-  return <AiScanner scan={scan} onUnavailable={onUnavailable} timing={FAST} />;
+  return <AiScanner scan={scan} onUnavailable={onUnavailable} timing={FAST} debug={debug} />;
 }
 
 const wait = (ms: number) => act(() => new Promise<void>((resolve) => setTimeout(resolve, ms)));
@@ -252,7 +258,7 @@ describe("AiScanner", () => {
   });
 
   test("a capture shows the ranked matches with which printing each is", async () => {
-    render(<Harness />);
+    render(<Harness debug />);
 
     const captureButton = await screen.findByRole<HTMLButtonElement>("button", { name: "Capture" });
     await waitFor(() => expect(captureButton.disabled).toBe(false));
@@ -357,5 +363,34 @@ describe("AiScanner", () => {
     expect(await screen.findByTestId("card-outline")).toBeTruthy();
     await wait(200);
     expect(mockCaptureCard).not.toHaveBeenCalled();
+  });
+
+  test("debug mode is off by default: no corner overlay or debug panel", async () => {
+    mockState.detection = { quad, score: 0.95, source: "opencv" };
+
+    render(<Harness />);
+
+    fireEvent.click(screen.getByRole("checkbox", { name: "Auto capture" }));
+    expect(await screen.findByTestId("card-outline")).toBeTruthy();
+    expect(screen.queryByTestId("debug-overlay")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Capture" }));
+    await screen.findByRole("button", { name: /Lightning Bolt M11 #149/ });
+    expect(screen.queryByText("Debug: what the scanner saw")).toBeNull();
+  });
+
+  test("debug mode labels the raw corners with the detector and its score", async () => {
+    mockState.detection = { quad, score: 0.87, source: "pose" };
+
+    render(<Harness debug />);
+
+    fireEvent.click(screen.getByRole("checkbox", { name: "Auto capture" }));
+    await waitFor(() => expect(screen.getByTestId("debug-detector").textContent).toMatch(/^pose 0\.87/));
+    const overlay = screen.getByTestId("debug-overlay");
+    for (const label of ["TL", "TR", "BR", "BL"]) expect(within(overlay).getByText(label)).toBeTruthy();
+
+    mockState.detection = null;
+    await waitFor(() => expect(screen.getByTestId("debug-detector").textContent).toBe("no card"));
+    expect(within(overlay).queryByText("TL")).toBeNull();
   });
 });

@@ -23,10 +23,12 @@ import Button from "~/components/Button";
 import CameraFeed from "~/components/CameraFeed";
 import ScanMatches, { type MatchOption } from "~/components/scan/ScanMatches";
 import { api } from "~/utils/api";
+import { isFeatureEnabled } from "~/utils/featureFlags";
 import { faceImageUrl, printingDetail } from "~/utils/recognition/display";
 import type { Quad } from "~/utils/recognition/geometry";
 import { AutoCaptureTracker, scaleQuad } from "~/utils/recognition/liveTracking";
 import { EMBED_MODEL } from "~/utils/recognition/model";
+import type { Detection } from "~/utils/recognition/browser/detector";
 import { canvasToRgba, rgbaToDataUrl } from "~/utils/recognition/browser/frame";
 import {
   useCardRecognizer,
@@ -65,7 +67,14 @@ type Props = {
   /** Called with a short notice when AI scanning can't run here. */
   onUnavailable: (notice: string) => void;
   timing?: Partial<ScannerTiming>;
+  /** Show the debug view. Defaults to the aiScanDebug flag. */
+  debug?: boolean;
 };
+
+/** One live detection as the detector reported it, in frame pixels. */
+type RawDetection = { quad: Quad; source: Detection["source"]; score: number };
+
+const CORNER_LABELS = ["TL", "TR", "BR", "BL"] as const;
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
@@ -73,12 +82,17 @@ function QuadOverlay({
   frame,
   quad,
   locked,
+  raw,
 }: {
   frame: { width: number; height: number };
   quad: Quad | null;
   locked: boolean;
+  /** Debug only: the detector's raw output, guide fallback included. */
+  raw?: RawDetection | null;
 }) {
   const guide = cardGuideRect(frame.width, frame.height);
+  const dot = Math.max(4, frame.width / 120);
+  const font = Math.max(12, frame.width / 40);
   return (
     <svg
       className="pointer-events-none absolute inset-0 h-full w-full"
@@ -109,11 +123,48 @@ function QuadOverlay({
           strokeDasharray={`${frame.width / 40} ${frame.width / 60}`}
         />
       )}
+      {raw !== undefined && (
+        <g data-testid="debug-overlay">
+          {raw?.quad.map((p, i) => (
+            <g key={CORNER_LABELS[i]}>
+              <circle cx={p.x} cy={p.y} r={dot} fill="rgb(236,72,153)" />
+              <text
+                x={p.x + dot * 1.5}
+                y={p.y - dot * 1.5}
+                fontSize={font}
+                fill="rgb(236,72,153)"
+                stroke="black"
+                strokeWidth={font / 10}
+                paintOrder="stroke"
+              >
+                {CORNER_LABELS[i]}
+              </text>
+            </g>
+          ))}
+          <text
+            data-testid="debug-detector"
+            x={font / 2}
+            y={font * 1.2}
+            fontSize={font}
+            fill="white"
+            stroke="black"
+            strokeWidth={font / 10}
+            paintOrder="stroke"
+          >
+            {raw ? `${raw.source} ${raw.score.toFixed(2)}${locked ? " locked" : ""}` : "no card"}
+          </text>
+        </g>
+      )}
     </svg>
   );
 }
 
-export default function AiScanner({ scan, onUnavailable, timing: timingOverrides }: Props) {
+export default function AiScanner({
+  scan,
+  onUnavailable,
+  timing: timingOverrides,
+  debug = isFeatureEnabled("aiScanDebug"),
+}: Props) {
   const timing = useMemo(() => ({ ...DEFAULT_TIMING, ...timingOverrides }), [timingOverrides]);
   const status = api.scan.status.useQuery(undefined, {
     retry: 1,
@@ -131,6 +182,7 @@ export default function AiScanner({ scan, onUnavailable, timing: timingOverrides
   const [hasFrames, setHasFrames] = useState(false);
 
   const [liveQuad, setLiveQuad] = useState<Quad | null>(null);
+  const [liveRaw, setLiveRaw] = useState<RawDetection | null>(null);
   const [locked, setLocked] = useState(false);
   const [autoCapture, setAutoCapture] = useState(true);
   const trackerRef = useRef<AutoCaptureTracker | null>(null);
@@ -269,6 +321,13 @@ export default function AiScanner({ scan, onUnavailable, timing: timingOverrides
             : null;
         const update = trackerRef.current!.update(quad, canvas.width, canvas.height, Date.now());
         setLiveQuad(quad);
+        setLiveRaw(
+          detection && {
+            quad: scaleQuad(detection.quad, canvas.width / frame.width),
+            source: detection.source,
+            score: detection.score,
+          },
+        );
         setLocked(update.locked);
         if (update.fire && autoCaptureRef.current) void startCaptureRef.current("auto");
       } catch (error) {
@@ -348,7 +407,14 @@ export default function AiScanner({ scan, onUnavailable, timing: timingOverrides
             onError={handleCameraError}
             onReady={setFrameSize}
             onFrameSource={handleFrameSource}
-            overlay={frameSize && <QuadOverlay frame={frameSize} quad={liveQuad} locked={locked} />}
+            overlay={frameSize && (
+                <QuadOverlay
+                  frame={frameSize}
+                  quad={liveQuad}
+                  locked={locked}
+                  raw={debug ? liveRaw : undefined}
+                />
+              )}
             disabled={busy || !modelsReady}
             captureLabel={busy ? "Working..." : "Capture"}
           />
@@ -408,7 +474,7 @@ export default function AiScanner({ scan, onUnavailable, timing: timingOverrides
         </>
       )}
 
-      {outcome && (
+      {debug && outcome && (
         <details className="text-sm text-gray-400">
           <summary className="cursor-pointer">Debug: what the scanner saw</summary>
           <div className="mt-2 flex flex-col gap-2">

@@ -43,11 +43,17 @@ export const NORMALIZATIONS = {
 
 const HF = "https://huggingface.co";
 
+// Model files are pinned to a Hugging Face commit so an upstream push can't
+// swap the weights under us. Moving to a newer commit means re-checking the
+// model (and, for the embedder, bumping EMBED_MODEL.id if its vectors change).
+const EMBED_REVISION = "653d88d94b2beb31a7894561e7c6b26f589a3861";
+const POSE_REVISION = "ef6d7912e7e2db79ce24976cb3ea84984e43721a";
+
 export const EMBED_MODEL: EmbedModelSpec = {
   id: "dhvazquez-mtg-embed-20260521-int8-imagenet",
   url:
     process.env.NEXT_PUBLIC_SCAN_EMBED_MODEL_URL ??
-    `${HF}/dhvazquez/mtg_card_identification_embeddings/resolve/main/20260521-044732/onnx/mtg_embed_int8.onnx`,
+    `${HF}/dhvazquez/mtg_card_identification_embeddings/resolve/${EMBED_REVISION}/20260521-044732/onnx/mtg_embed_int8.onnx`,
   inputWidth: 320,
   inputHeight: 448,
   dims: 256,
@@ -67,7 +73,7 @@ export const POSE_MODEL: PoseModelSpec | null = (() => {
   return {
     url:
       configured ??
-      `${HF}/dhvazquez/mtg_card_pose_estimation/resolve/main/exports/mtg_4kp_s_r4b_fp16.onnx`,
+      `${HF}/dhvazquez/mtg_card_pose_estimation/resolve/${POSE_REVISION}/exports/mtg_4kp_s_r4b_fp16.onnx`,
     inputSize: 640,
   };
 })();
