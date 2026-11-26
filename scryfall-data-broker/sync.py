@@ -12,7 +12,9 @@
 # columns we store against the hashes saved by the last run (state/hashes.json,
 # about 10 MB). New cards and cards whose stored columns changed are upserted
 # in batches, all in one transaction. With no saved hashes (first run, lost
-# cache, or --full) every card is upserted; nothing is ever deleted.
+# cache, or --full) every card is upserted. With --prune, Card rows whose id
+# isn't in the bulk file are deleted afterwards, except any card a collection
+# still references; those are kept and logged.
 #
 # State is only written after the database commit succeeds, and never on a
 # dry run, so a failed or dry run leaves the next run to pick up the changes.
@@ -109,6 +111,8 @@ class SyncPlan:
         self.hashes = {}
         self.counts = {INSERT: 0, UPDATE: 0, 'UNCHANGED': 0, 'SKIP': 0}
         self.removed = []
+        # Every id in the file, skipped cards included, so prune keeps them.
+        self.seen = set()
         self.done = False
 
     def operations(self):
@@ -118,6 +122,7 @@ class SyncPlan:
                 self.counts['SKIP'] += 1
                 logger.warning('Skipping a card with no id')
                 continue
+            self.seen.add(card_id)
             row = apply_diff.card_to_row(card_id, card)
             missing = [name for name in apply_diff.REQUIRED_FIELDS
                        if row.get(name) is None]
@@ -218,6 +223,68 @@ def execute_upserts(conn, operations, batch_size=500):
     finally:
         cursor.close()
     return written
+
+
+# A bulk file this small is broken or truncated (the real one has ~120k
+# cards), so prune refuses rather than deleting most of the table.
+PRUNE_MIN_KEEP = 50000
+
+PRUNE_FIND_SQL = '''
+SELECT c.id, c.name,
+       EXISTS (SELECT 1 FROM "CardsOnCollections" e WHERE e."cardId" = c.id)
+       OR EXISTS (SELECT 1 FROM "Collection" k WHERE c.id = ANY(k.cards))
+FROM "Card" c
+WHERE NOT EXISTS (SELECT 1 FROM sync_keep_ids k WHERE k.id = c.id)
+ORDER BY c.name, c.id
+'''
+
+# Re-checks references at delete time, so a card added to a collection
+# between the SELECT and the DELETE is still kept.
+PRUNE_DELETE_SQL = '''
+DELETE FROM "Card" c
+WHERE c.id = ANY(%s::text[])
+  AND NOT EXISTS (SELECT 1 FROM "CardsOnCollections" e WHERE e."cardId" = c.id)
+  AND NOT EXISTS (SELECT 1 FROM "Collection" k WHERE c.id = ANY(k.cards))
+'''
+
+
+def prune_missing(conn, keep_ids, dry_run=False, min_keep=PRUNE_MIN_KEEP):
+    """Delete Card rows whose id isn't in keep_ids, unless a collection uses them.
+
+    Returns (deleted, would_delete, kept_in_collections). kept_in_collections
+    is a list of (id, name). On a dry run nothing is deleted and deleted is 0.
+    """
+    if len(keep_ids) < min_keep:
+        raise RuntimeError(
+            f'Refusing to prune: the bulk file only had {len(keep_ids)} cards '
+            f'(expected at least {min_keep})')
+    cursor = conn.cursor()
+    try:
+        cursor.execute('CREATE TEMP TABLE sync_keep_ids ON COMMIT DROP AS '
+                       'SELECT unnest(%s::text[]) AS id', (sorted(keep_ids),))
+        cursor.execute('ANALYZE sync_keep_ids')
+        cursor.execute(PRUNE_FIND_SQL)
+        rows = cursor.fetchall()
+        kept = [(card_id, name) for card_id, name, used in rows if used]
+        doomed = [card_id for card_id, _name, used in rows if not used]
+        for card_id, name in kept:
+            logger.warning('Keeping %s (%s): not in the bulk file, but a '
+                           'collection has it', card_id, name)
+        deleted = 0
+        if doomed and not dry_run:
+            cursor.execute(PRUNE_DELETE_SQL, (doomed,))
+            deleted = cursor.rowcount
+        if dry_run:
+            conn.rollback()
+        else:
+            conn.commit()
+    except BaseException:
+        conn.rollback()
+        logger.exception('Prune failed, rolled back')
+        raise
+    finally:
+        cursor.close()
+    return deleted, len(doomed), kept
 
 
 def connect_with_retry(url, attempts=5, delay=10, sleep=time.sleep):
@@ -351,19 +418,30 @@ def cmd_apply(args, cards=None, connect=None):
     plan = SyncPlan(cards if cards is not None else iter_cards(args.cards),
                     previous)
 
+    url = os.environ.get('DATABASE_URL')
+    prune = None
     if args.dry_run:
         shown = 0
         for op in plan.operations():
             if shown < 20:
                 print(f"{op.kind} {op.card_id} ({op.fields.get('name')})")
                 shown += 1
+        if args.prune and url:
+            conn = (connect or connect_with_retry)(url)
+            try:
+                prune = prune_missing(conn, plan.seen, dry_run=True)
+            finally:
+                conn.close()
+        elif args.prune:
+            print('No DATABASE_URL, so the dry run skips the prune check.')
     else:
-        url = os.environ.get('DATABASE_URL')
         if not url:
             sys.exit('DATABASE_URL is not set.')
         conn = (connect or connect_with_retry)(url)
         try:
             execute_upserts(conn, plan.operations(), args.batch_size)
+            if args.prune:
+                prune = prune_missing(conn, plan.seen)
         finally:
             conn.close()
 
@@ -371,7 +449,16 @@ def cmd_apply(args, cards=None, connect=None):
     summary = (f"{len(plan.hashes)} cards: {counts[INSERT]} new, "
                f"{counts[UPDATE]} changed, {counts['UNCHANGED']} unchanged, "
                f"{counts['SKIP']} skipped, {len(plan.removed)} removed "
-               f"from Scryfall (left in place)")
+               f"from Scryfall since the last run")
+    if prune is not None:
+        deleted, would_delete, kept = prune
+        if args.dry_run:
+            summary += (f". Prune would delete {would_delete} cards not in "
+                        f"the bulk file and keep {len(kept)} that are in a "
+                        f"collection")
+        else:
+            summary += (f". Pruned {deleted} cards not in the bulk file, "
+                        f"kept {len(kept)} that are in a collection")
     if plan.removed:
         logger.info('Removed from Scryfall: %s%s',
                     ', '.join(plan.removed[:20]),
@@ -409,6 +496,9 @@ def parse_args(argv):
                        help='print what would change, touch nothing')
     apply.add_argument('--full', action='store_true',
                        help='ignore saved hashes and upsert every card')
+    apply.add_argument('--prune', action='store_true',
+                       help="delete cards that aren't in the bulk file, "
+                            'except ones a collection uses')
     apply.add_argument('--batch-size', type=int, default=500)
 
     args = parser.parse_args(argv)
