@@ -83,6 +83,11 @@ model CardsOnCollections {
     // Part of the key, so a foil and a non-foil copy are separate entries.
     finish        String     @default("nonfoil")
     count         Int        @default(1)
+    // Condition of these copies: "NM", "LP", "MP", "HP" or "DMG". Not part
+    // of the key; an import that adds to an existing entry keeps its value.
+    condition     String     @default("NM")
+    // Scryfall language code of these copies, like "en" or "ja".
+    language      String     @default("en")
     createdAt     DateTime   @default(now())
     updatedAt     DateTime   @updatedAt
 
