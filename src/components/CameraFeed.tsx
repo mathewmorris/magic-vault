@@ -1,76 +1,114 @@
-import React, { useEffect, useRef, useCallback, useState } from "react";
-import Image from "next/image";
-import Tesseract from 'tesseract.js';
+"use client";
 
-export const useCard = () => {
-  const [text] = useState<string>();
-    const recognizeCard = useCallback((image: Tesseract.ImageLike) => {
-      Tesseract.recognize(
-          image,
-          'eng',
-          ).then((data) => {
-            console.log(data);
-          }).catch((error) => {
-            console.error(error);
-          });
-    }, []);
-    
-    return { recognizeCard, text };
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import Button from "./Button";
+
+interface CameraFeedProps {
+  /** Called with a full-resolution snapshot of the current frame. */
+  onCapture: (frame: HTMLCanvasElement) => void;
+  /** Called if the camera can't start (permission denied, no camera, etc). */
+  onError?: (error: unknown) => void;
+  /** Called once the stream is playing, with the frame size in pixels. */
+  onReady?: (size: { width: number; height: number }) => void;
+  /** Drawn on top of the live video, e.g. a framing guide. */
+  overlay?: React.ReactNode;
+  disabled?: boolean;
+  captureLabel?: string;
 }
-  
-export default function CameraFeed() {
-  const webcamRef = useRef<HTMLVideoElement>(null);
-  const [capturedImage, setCapturedImage] = useState<string | null>(null);
-  const { text, recognizeCard } = useCard();
 
-  const capture = useCallback(() => {
-    if (!webcamRef.current) {
-      console.error("webcamRef is not defined");
-      return;
-    };
+/**
+ * Live camera preview with a capture button. Prefers the rear camera on
+ * phones and stops the stream when it unmounts.
+ */
+export default function CameraFeed({
+  onCapture,
+  onError,
+  onReady,
+  overlay,
+  disabled = false,
+  captureLabel = "Capture",
+}: CameraFeedProps) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [ready, setReady] = useState(false);
 
-    const canvas = document.createElement("canvas");
-    canvas.width = webcamRef.current.videoWidth;
-    canvas.height = webcamRef.current.videoHeight;
-    const ctx = canvas.getContext("2d");
-
-    if (!ctx) {
-      console.error("ctx is not defined");
-      return;
-    }
-
-    ctx.drawImage(webcamRef.current, 0, 0);
-
-    const imageSrc =  canvas.toDataURL("image/webp", 0.92);
-
-    if (imageSrc) {
-      setCapturedImage(imageSrc);
-      recognizeCard(imageSrc);
-    }
-  }, [webcamRef, recognizeCard]);
+  // Keep the latest error callback without restarting the camera when it changes.
+  const onErrorRef = useRef(onError);
+  useEffect(() => {
+    onErrorRef.current = onError;
+  }, [onError]);
 
   useEffect(() => {
-    const video = document.getElementById('video') as HTMLVideoElement | null;
-    navigator.mediaDevices.getUserMedia({ video: true })
-      .then((stream) => {
-        if (!video) return;
+    let stream: MediaStream | null = null;
+    let cancelled = false;
 
-        video.srcObject = stream;
-        video.play()
-          .catch((err) => console.error(err));
+    // mediaDevices is missing on insecure origins (plain http that isn't localhost).
+    if (typeof navigator.mediaDevices?.getUserMedia !== "function") {
+      const error = new Error("Camera API is not available");
+      error.name = "NotSupportedError";
+      onErrorRef.current?.(error);
+      return;
+    }
+
+    void navigator.mediaDevices
+      .getUserMedia({ video: { facingMode: { ideal: "environment" } }, audio: false })
+      .then(async (mediaStream) => {
+        if (cancelled) {
+          mediaStream.getTracks().forEach((track) => track.stop());
+          return;
+        }
+        stream = mediaStream;
+        const video = videoRef.current;
+        if (!video) return;
+        video.srcObject = mediaStream;
+        await video.play();
       })
-      .catch((err) => console.error(err));
+      .catch((error: unknown) => {
+        if (!cancelled) onErrorRef.current?.(error);
+      });
+
+    return () => {
+      cancelled = true;
+      stream?.getTracks().forEach((track) => track.stop());
+    };
   }, []);
 
+  const handleLoadedMetadata = useCallback(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    setReady(true);
+    onReady?.({ width: video.videoWidth, height: video.videoHeight });
+  }, [onReady]);
+
+  const capture = useCallback(() => {
+    const video = videoRef.current;
+    if (!video || video.videoWidth === 0) return;
+
+    const canvas = document.createElement("canvas");
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    ctx.drawImage(video, 0, 0);
+    onCapture(canvas);
+  }, [onCapture]);
+
   return (
-    <div>
-      <button type="button" className="bg-violet-800 hover:bg-violet-600 text-white font-bold py-2 px-4 rounded-full" onClick={capture}>Capture</button>
-      <canvas id="canvas" width="640" height="480"></canvas>
-      <video className="hidden" id="video" ref={webcamRef} width="640" height="480" autoPlay />
-      {text && <p>{text}</p>}
-      {capturedImage && (
-        <Image src={capturedImage} width="640" height="480" alt="captured" />
-      )}
+    <div className="flex flex-col items-center gap-4">
+      <div className="relative w-full max-w-xl overflow-hidden rounded-lg bg-black">
+        <video
+          ref={videoRef}
+          className="block h-auto w-full"
+          onLoadedMetadata={handleLoadedMetadata}
+          autoPlay
+          muted
+          playsInline
+        />
+        {ready && overlay}
+      </div>
+      <Button type="button" onClick={capture} disabled={disabled || !ready}>
+        {captureLabel}
+      </Button>
     </div>
-  )
+  );
 }
