@@ -71,7 +71,7 @@ class FakeConnection:
 
 def apply_args(state_dir, **overrides):
     values = dict(cards='unused.json', state_dir=state_dir, updated_at='T2',
-                  dry_run=False, full=False, batch_size=500)
+                  dry_run=False, full=False, prune=False, batch_size=500)
     values.update(overrides)
     return argparse.Namespace(**values)
 
@@ -432,3 +432,90 @@ class IterCardsFormatsTest(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class PruneCursor:
+    def __init__(self, rows, rowcount=None):
+        self.rows = rows
+        self.rowcount = rowcount
+        self.executed = []
+        self.closed = False
+
+    def execute(self, sql, params=None):
+        self.executed.append((sql, params))
+
+    def fetchall(self):
+        return self.rows
+
+    def close(self):
+        self.closed = True
+
+
+class PruneTest(unittest.TestCase):
+    def make(self, rows, rowcount=None):
+        cursor = PruneCursor(rows, rowcount)
+        return cursor, FakeConnection(cursor)
+
+    def test_deletes_unused_and_keeps_cards_in_collections(self):
+        cursor, conn = self.make(
+            [('gone-1', 'Old A', False), ('kept-1', 'Old B', True),
+             ('gone-2', 'Old C', False)], rowcount=2)
+        deleted, would, kept = sync.prune_missing(
+            conn, {'a', 'b'}, min_keep=1)
+        self.assertEqual((deleted, would), (2, 2))
+        self.assertEqual(kept, [('kept-1', 'Old B')])
+        delete_sql, params = cursor.executed[-1]
+        self.assertIn('DELETE FROM "Card"', delete_sql)
+        self.assertIn('CardsOnCollections', delete_sql)
+        self.assertEqual(params, (['gone-1', 'gone-2'],))
+        self.assertEqual(cursor.executed[0][1], (['a', 'b'],))
+        self.assertTrue(conn.committed)
+        self.assertTrue(cursor.closed)
+
+    def test_dry_run_deletes_nothing_and_rolls_back(self):
+        cursor, conn = self.make([('gone-1', 'Old A', False)])
+        deleted, would, kept = sync.prune_missing(
+            conn, {'a'}, dry_run=True, min_keep=1)
+        self.assertEqual((deleted, would, kept), (0, 1, []))
+        self.assertFalse(any('DELETE' in sql for sql, _ in cursor.executed))
+        self.assertTrue(conn.rolled_back)
+        self.assertFalse(conn.committed)
+
+    def test_nothing_to_prune_skips_the_delete(self):
+        cursor, conn = self.make([])
+        self.assertEqual(sync.prune_missing(conn, {'a'}, min_keep=1),
+                         (0, 0, []))
+        self.assertFalse(any('DELETE' in sql for sql, _ in cursor.executed))
+
+    def test_refuses_on_a_tiny_bulk_file(self):
+        cursor, conn = self.make([('gone-1', 'Old A', False)])
+        with self.assertRaises(RuntimeError):
+            sync.prune_missing(conn, {'a'}, min_keep=10)
+        self.assertEqual(cursor.executed, [])
+
+    def test_plan_keeps_skipped_ids_in_seen(self):
+        plan = sync.SyncPlan([{'id': 'no-name'}], {})
+        list(plan.operations())
+        self.assertEqual(plan.seen, {'no-name'})
+
+
+class ApplyPruneTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.state = self.tmp.name
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_apply_with_prune_reports_deleted_and_kept(self):
+        conn = FakeConnection()
+        out = io.StringIO()
+        with mock.patch.dict(os.environ, {'DATABASE_URL': 'postgres://x'}), \
+                mock.patch.object(sync, 'prune_missing',
+                                  return_value=(3, 3, [('k', 'Kept')])) as prune, \
+                redirect_stdout(out):
+            sync.cmd_apply(apply_args(self.state, prune=True),
+                           cards=iter([card('a')]), connect=lambda url: conn)
+        self.assertEqual(prune.call_args.args[1], {'a'})
+        self.assertIn('Pruned 3 cards', out.getvalue())
+        self.assertIn('kept 1', out.getvalue())
