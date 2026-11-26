@@ -33,6 +33,9 @@ Pulled from Vercel with `npm run vercel:env`. See [.env.example](./.env.example)
 | Variable | Required | Description |
 |---|---|---|
 | `NEXT_PUBLIC_DONATION_URL` | No | Donation page (must be `https://`). Shows a "Support Magic Vault" link in the footer and on /about. Hidden when unset. |
+| `AFFILIATE_LINKS` | No | `on` or `off` (default `off`). Turns affiliate tracking on buy links on or off. While off, buy links use Scryfall's own store links and no disclosure shows. Redeploy after changing it. |
+| `TCGPLAYER_AFFILIATE_URL` | No | TCGplayer tracking link from Impact (must be `https://`), like `https://partner.tcgplayer.com/c/<account>/<ad>/21018`. The product page goes on the end as `?u=`. Used only while `AFFILIATE_LINKS=on`. |
+| `CARDKINGDOM_PARTNER_ID` | No | Card Kingdom partner ID, sent as `?partner=`. Used only while `AFFILIATE_LINKS=on`. |
 
 ## Scripts
 

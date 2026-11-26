@@ -5,6 +5,7 @@ import {
     createTRPCRouter,
     publicProcedure,
 } from "~/server/api/trpc";
+import { affiliateConfig } from "~/server/affiliate";
 import { buildCardSearch, type CardSearchRow } from "~/server/search/buildCardSearch";
 import { cacheScryfallCards } from "~/server/scryfall/cacheCards";
 import {
@@ -13,6 +14,7 @@ import {
     scryfall,
     type ScryfallRuling,
 } from "~/server/scryfall/client";
+import { buyLinks } from "~/utils/buyLinks";
 
 /** How many other printings the card page lists. */
 export const PRINTINGS_LIMIT = 60;
@@ -62,6 +64,7 @@ export const cardRouter = createTRPCRouter({
                 ...card,
                 printings: found.slice(0, PRINTINGS_LIMIT),
                 hasMorePrintings: found.length > PRINTINGS_LIMIT,
+                buyLinks: buyLinks(card, affiliateConfig()),
             };
         }),
     rulings: publicProcedure

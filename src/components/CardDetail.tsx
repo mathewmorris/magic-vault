@@ -14,6 +14,7 @@ import {
   type Legality,
 } from "~/utils/cardDetail";
 import { splitOracleText, splitSymbols } from "~/utils/manaSymbols";
+import BuyLinks from "./BuyLinks";
 import Button from "./Button";
 import ManaSymbols, { SymbolText } from "./ManaSymbols";
 
@@ -263,6 +264,7 @@ export default function CardDetail({ card }: { card: CardDetailData }) {
           </a>
         </div>
 
+        <BuyLinks links={card.buyLinks} cardName={card.name} />
         <LegalityGrid legalities={card.legalities} />
         <Rulings id={card.id} />
         <Printings card={card} />
