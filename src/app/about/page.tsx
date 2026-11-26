@@ -1,5 +1,8 @@
 import React from "react";
 
+import SupportLink from "~/components/SupportLink";
+import { env } from "~/env";
+
 export default function About() {
   return (
     <div className="container mx-auto p-4">
@@ -14,6 +17,15 @@ export default function About() {
           checkout the project on github
         </a>
       </p>
+      {env.NEXT_PUBLIC_DONATION_URL && (
+        <p className="mt-4">
+          Want to help keep it running?{" "}
+          <SupportLink
+            href={env.NEXT_PUBLIC_DONATION_URL}
+            className="font-bold"
+          />
+        </p>
+      )}
     </div>
   );
 }

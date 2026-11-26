@@ -4,6 +4,8 @@ import Image from "next/image";
 import { Analytics } from "@vercel/analytics/react";
 
 import AuthButton from "~/components/AuthButton";
+import SupportLink from "~/components/SupportLink";
+import { env } from "~/env";
 import { getServerAuthSession } from "~/server/auth";
 import "~/styles/globals.css";
 import { Providers } from "./providers";
@@ -70,6 +72,13 @@ export default async function RootLayout({
               </div>
             </nav>
             <div className="container mx-auto py-8">{children}</div>
+            {env.NEXT_PUBLIC_DONATION_URL && (
+              <footer className="p-4 text-sm font-semibold dark:bg-gray-950">
+                <div className="container mx-auto flex justify-center">
+                  <SupportLink href={env.NEXT_PUBLIC_DONATION_URL} />
+                </div>
+              </footer>
+            )}
             <Analytics />
           </main>
         </Providers>

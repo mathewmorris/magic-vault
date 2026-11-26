@@ -26,6 +26,14 @@ npm run dev:docker       # start Next.js + Postgres + Mailcatcher
 
 App runs at `http://localhost:3000`. Mailcatcher (magic link emails) at `http://localhost:1080`.
 
+## Environment Variables
+
+Pulled from Vercel with `npm run vercel:env`. See [.env.example](./.env.example) for the full list and `src/env.js` for validation.
+
+| Variable | Required | Description |
+|---|---|---|
+| `NEXT_PUBLIC_DONATION_URL` | No | Donation page (must be `https://`). Shows a "Support Magic Vault" link in the footer and on /about. Hidden when unset. |
+
 ## Scripts
 
 | Command | Description |
