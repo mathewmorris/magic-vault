@@ -7,6 +7,8 @@
  * (NEXT_PUBLIC_FEATURE_AI_SCAN) and affiliate links are off in production,
  * so they stay out of here until they're on.
  */
+import { type PipColor } from "./pips";
+
 export type GemTone = "pink" | "purple" | "plain";
 
 export type Feature = {
@@ -16,6 +18,12 @@ export type Feature = {
   typeLine: string;
   /** Colored gems in the corner. Decoration only, not real mana symbols. */
   cost: GemTone[];
+  /**
+   * The colors of the spell the card casts when you click it. Always holds
+   * the pips of its cost (plain counts as colorless) plus a Magic color that
+   * fits the card.
+   */
+  colors: PipColor[];
   /** The rules text: what the feature actually does. */
   body: string;
   flavor: string;
@@ -32,6 +40,7 @@ export const FEATURES: Feature[] = [
     title: "Search Every Card",
     typeLine: "Instant",
     cost: ["pink"],
+    colors: ["U", "pink"],
     body: "Find any card by name, color, type, rules text, mana value, set or format. Scryfall-style search works too, and you don't need an account.",
     flavor: "“Wait, they printed that?”",
     href: "/search",
@@ -42,6 +51,7 @@ export const FEATURES: Feature[] = [
     title: "Track What You Own",
     typeLine: "Enchantment — Binder",
     cost: ["plain", "purple"],
+    colors: ["W", "C", "purple"],
     body: "Keep collections with counts, foils, condition and language. Split them however you like: trade binder, bulk box, the shoebox under the bed.",
     flavor: "Finally, a real answer to “do I have one of these?”",
     href: "/collections",
@@ -52,6 +62,7 @@ export const FEATURES: Feature[] = [
     title: "Know What It's Worth",
     typeLine: "Artifact — Treasure",
     cost: ["plain", "pink"],
+    colors: ["R", "C", "pink"],
     body: "Prices update every day, and every collection shows its total value.",
     flavor: "Unlike other Treasure, you don't have to sacrifice it to find out.",
     href: "/collections",
@@ -62,6 +73,7 @@ export const FEATURES: Feature[] = [
     title: "Build Decks",
     typeLine: "Sorcery",
     cost: ["plain", "purple", "pink"],
+    colors: ["W", "U", "B", "R", "G", "C", "purple", "pink"],
     body: "Brew for Commander, Modern, Pauper and more. Magic Vault checks the rules and shows which cards you still need.",
     flavor: "Sorcery speed. Take your time, nobody's waiting on priority.",
     href: "/decks",
@@ -72,6 +84,7 @@ export const FEATURES: Feature[] = [
     title: "Bring Your Cards With You",
     typeLine: "Instant",
     cost: ["purple"],
+    colors: ["B", "purple"],
     body: "Import a list or a CSV from Moxfield, Archidekt, ManaBox or Deckbox, and export any collection back out.",
     flavor: "Exile your spreadsheet. Return it to the battlefield as a vault.",
     href: "/collections",
@@ -82,6 +95,7 @@ export const FEATURES: Feature[] = [
     title: "Scan With Your Camera",
     typeLine: "Artifact Creature — Scanner",
     cost: ["plain", "pink"],
+    colors: ["G", "C", "pink"],
     body: "Hold a card up to your phone or webcam. Magic Vault reads the card name and adds it to a collection.",
     flavor: "It reads the name. You still have to sleeve it.",
     pt: "1/1",

@@ -1,9 +1,18 @@
 /**
  * @jest-environment jsdom
  */
-import { render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 
+import { FEATURES } from "./features";
+import { GEM_PIPS } from "./pips";
 import Landing from "./Landing";
+import { NAVIGATE_AFTER_MS } from "./TapCard";
+
+const push = jest.fn();
+jest.mock("next/navigation", () => ({
+  useRouter: () => ({ push }),
+  usePathname: () => "/",
+}));
 
 const bolt = { id: "bolt", name: "Lightning Bolt", imageUrl: "https://cards.scryfall.io/normal/bolt.jpg" };
 
@@ -79,5 +88,46 @@ describe("Landing", () => {
 
     expect(screen.getByRole("link", { name: "Scryfall" }).getAttribute("href")).toBe("https://scryfall.com");
     expect(screen.getByText(/unofficial Fan Content/i)).toBeTruthy();
+  });
+
+  test("clicking a feature card taps that card, then goes to its page", () => {
+    jest.useFakeTimers();
+    try {
+      render(<Landing featuredCards={[]} cardCount={null} />);
+      const link = screen.getByRole("link", { name: /Search Every Card/ });
+
+      fireEvent.click(link);
+
+      expect(link.closest("[data-tapped]")).toBe(link.parentElement);
+      expect(push).not.toHaveBeenCalled();
+      act(() => jest.advanceTimersByTime(NAVIGATE_AFTER_MS));
+      expect(push).toHaveBeenCalledWith("/search");
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  test("the hero card's buttons tap the hero card", () => {
+    jest.useFakeTimers();
+    try {
+      render(<Landing featuredCards={[]} cardCount={null} />);
+
+      fireEvent.click(screen.getByRole("link", { name: "What is this?" }));
+
+      const hero = screen.getByRole("region", { name: "Magic Vault" });
+      expect(hero.parentElement?.dataset.tapped).toBe("true");
+      act(() => jest.advanceTimersByTime(NAVIGATE_AFTER_MS));
+      expect(push).toHaveBeenCalledWith("/about");
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  test("every feature's spell includes the pips of its cost", () => {
+    for (const feature of FEATURES) {
+      for (const tone of feature.cost) {
+        expect(feature.colors).toContain(GEM_PIPS[tone]);
+      }
+    }
   });
 });

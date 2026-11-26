@@ -1,5 +1,3 @@
-import Link from "next/link";
-
 import FanContentNotice from "~/components/FanContentNotice";
 import { type FeaturedCard } from "~/server/featuredCards";
 import { signInHref } from "~/utils/signInHref";
@@ -8,8 +6,11 @@ import { artWindow, cardBar, cardFrame, cardInner, flavorText, Gem, SetSymbol, t
 import CardSpread from "./CardSpread";
 import FeatureIcon from "./FeatureIcon";
 import { FEATURES, type Feature } from "./features";
+import { type PipColor } from "./pips";
 import QuickSearch from "./QuickSearch";
 import { mutedText, primaryAction, secondaryAction } from "./styles";
+import TapCard from "./TapCard";
+import TapLink from "./TapLink";
 
 /** Questions people ask before signing up, written up like card rulings. */
 const RULINGS = [
@@ -53,6 +54,11 @@ type LandingProps = {
   cardCount: number | null;
 };
 
+// Spell colors for the closing pair: Keep is pure Magic Vault, Mulligan
+// shuffles in some blue (it's card draw, sort of).
+const KEEP_COLORS: PipColor[] = ["pink", "purple"];
+const MULLIGAN_COLORS: PipColor[] = ["U", "purple", "C"];
+
 /** One line of rules text: a bold cost or keyword, then what it does. */
 function Ability({ cost, children }: { cost: React.ReactNode; children: React.ReactNode }) {
   return (
@@ -65,126 +71,128 @@ function Ability({ cost, children }: { cost: React.ReactNode; children: React.Re
 /** The hero: the pitch for Magic Vault, laid out as one big card. */
 function VaultCard({ featuredCards, cardCount }: LandingProps) {
   return (
-    <section aria-label="Magic Vault" className={`mx-auto max-w-5xl ${cardFrame}`}>
-      <div className={cardInner}>
-        <div className={cardBar}>
-          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Magic Vault</h1>
-          <Gem tone="plain" size="lg" label="Costs 0. It's free.">
-            0
-          </Gem>
-        </div>
-
-        <div className="grid gap-2 lg:grid-cols-2">
-          <div className={`flex items-center px-3 ${artWindow}`}>
-            <div
-              aria-hidden="true"
-              className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(250,10,169,0.25),transparent_55%)]"
-            />
-            <CardSpread cards={featuredCards} />
+    <TapCard className="mx-auto max-w-5xl">
+      <section aria-label="Magic Vault" className={cardFrame}>
+        <div className={cardInner}>
+          <div className={cardBar}>
+            <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Magic Vault</h1>
+            <Gem tone="plain" size="lg" label="Costs 0. It's free.">
+              0
+            </Gem>
           </div>
 
-          <div className="flex flex-col gap-2">
-            <div className={cardBar}>
-              <p className="text-sm font-semibold sm:text-base">Legendary Artifact &mdash; Collection Tracker</p>
-              <SetSymbol />
+          <div className="grid gap-2 lg:grid-cols-2">
+            <div className={`flex items-center px-3 ${artWindow}`}>
+              <div
+                aria-hidden="true"
+                className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(250,10,169,0.25),transparent_55%)]"
+              />
+              <CardSpread cards={featuredCards} />
             </div>
-            <div className={`flex flex-1 flex-col gap-4 ${textBox}`}>
-              <Ability cost="Free">
-                <span className="italic">
-                  (This costs nothing to cast. Searching doesn&apos;t even need an account.)
-                </span>
-              </Ability>
 
-              <div className="space-y-2">
-                <Ability
-                  cost={
-                    <>
-                      <Gem tone="purple">T</Gem>:
-                    </>
-                  }
-                >
-                  Search every card ever printed.
-                </Ability>
-                <QuickSearch />
+            <div className="flex flex-col gap-2">
+              <div className={cardBar}>
+                <p className="text-sm font-semibold sm:text-base">Legendary Artifact &mdash; Collection Tracker</p>
+                <SetSymbol />
               </div>
-
-              <div className="space-y-3">
-                <Ability cost="Sign in:">
-                  Open a vault of your own. Track what you own and what it&apos;s worth, and build
-                  decks from the cards already in your binder.
+              <div className={`flex flex-1 flex-col gap-4 ${textBox}`}>
+                <Ability cost="Free">
+                  <span className="italic">
+                    (This costs nothing to cast. Searching doesn&apos;t even need an account.)
+                  </span>
                 </Ability>
-                <div className="flex flex-wrap items-center gap-3">
-                  <Link href={signInHref("/")} className={primaryAction}>
-                    Start your vault
-                  </Link>
-                  <Link href="/about" className={secondaryAction}>
-                    What is this?
-                  </Link>
+
+                <div className="space-y-2">
+                  <Ability
+                    cost={
+                      <>
+                        <Gem tone="purple">T</Gem>:
+                      </>
+                    }
+                  >
+                    Search every card ever printed.
+                  </Ability>
+                  <QuickSearch />
                 </div>
-              </div>
 
-              <p className={`mt-auto border-t border-purple-100/40 pt-3 ${flavorText}`}>
-                Somewhere in that shoebox is a card worth more than the shoebox.
-              </p>
+                <div className="space-y-3">
+                  <Ability cost="Sign in:">
+                    Open a vault of your own. Track what you own and what it&apos;s worth, and build decks from the
+                    cards already in your binder.
+                  </Ability>
+                  <div className="flex flex-wrap items-center gap-3">
+                    <TapLink href={signInHref("/")} className={primaryAction}>
+                      Start your vault
+                    </TapLink>
+                    <TapLink href="/about" className={secondaryAction}>
+                      What is this?
+                    </TapLink>
+                  </div>
+                </div>
+
+                <p className={`mt-auto border-t border-purple-100/40 pt-3 ${flavorText}`}>
+                  Somewhere in that shoebox is a card worth more than the shoebox.
+                </p>
+              </div>
             </div>
           </div>
-        </div>
 
-        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 px-2 text-xs text-gray-400">
-          <span>MV &middot; 001 &middot; EN &middot; Illus. your binder</span>
-          {cardCount ? (
-            <span>{cardCount.toLocaleString("en-US")} cards to search, prices updated daily.</span>
-          ) : null}
+          <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 px-2 text-xs text-gray-400">
+            <span>MV &middot; 001 &middot; EN &middot; Illus. your binder</span>
+            {cardCount ? <span>{cardCount.toLocaleString("en-US")} cards to search, prices updated daily.</span> : null}
+          </div>
         </div>
-      </div>
-    </section>
+      </section>
+    </TapCard>
   );
 }
 
 /** One feature, drawn as a small card that links to where it lives. */
 function FeatureCard({ feature, number }: { feature: Feature; number: number }) {
   return (
-    <Link
-      href={feature.signedIn ? signInHref(feature.href) : feature.href}
-      className={`group block h-full transition duration-300 hover:-translate-y-1 hover:drop-shadow-glow focus:outline-none focus-visible:ring-2 focus-visible:ring-pink-300 ${cardFrame}`}
-    >
-      <article className={cardInner}>
-        <div className={cardBar}>
-          <h3 className="font-bold leading-tight">{feature.title}</h3>
-          <span className="flex gap-1">
-            {feature.cost.map((tone, index) => (
-              <Gem key={index} tone={tone} />
-            ))}
-          </span>
-        </div>
-        <div className={`flex h-24 items-center justify-center text-pink-300 ${artWindow}`}>
-          <div
-            aria-hidden="true"
-            className="absolute inset-0 bg-[radial-gradient(circle_at_50%_120%,rgba(250,10,169,0.35),transparent_60%)]"
-          />
-          <FeatureIcon id={feature.id} className="relative h-12 w-12 transition duration-300 group-hover:scale-110" />
-        </div>
-        <div className={cardBar}>
-          <p className="text-sm font-semibold leading-tight">{feature.typeLine}</p>
-          <SetSymbol />
-        </div>
-        <div className={`relative flex flex-1 flex-col gap-3 text-sm ${textBox}`}>
-          <p className="leading-relaxed">{feature.body}</p>
-          <p className={flavorText}>{feature.flavor}</p>
-          {feature.pt ? (
-            <span className="absolute -bottom-3 right-3 rounded-md border border-purple-200/60 bg-gradient-to-r from-purple-700 to-purple-800 px-2 py-0.5 text-sm font-bold text-white">
-              {feature.pt}
+    <TapCard colors={feature.colors} className="h-full">
+      <TapLink
+        href={feature.signedIn ? signInHref(feature.href) : feature.href}
+        className={`group block h-full transition duration-300 hover:-translate-y-1 hover:drop-shadow-glow focus:outline-none focus-visible:ring-2 focus-visible:ring-pink-300 ${cardFrame}`}
+      >
+        <article className={cardInner}>
+          <div className={cardBar}>
+            <h3 className="font-bold leading-tight">{feature.title}</h3>
+            <span className="flex gap-1">
+              {feature.cost.map((tone, index) => (
+                <Gem key={index} tone={tone} />
+              ))}
             </span>
-          ) : null}
-        </div>
-        <div className="flex items-center justify-between gap-3 px-1 pt-1 text-xs text-gray-400">
-          <span>{String(number).padStart(3, "0")}/006</span>
-          <span className="font-semibold text-pink-300 group-hover:text-pink-200">
-            {feature.signedIn ? "Sign in to use" : "Try it now"} &rarr;
-          </span>
-        </div>
-      </article>
-    </Link>
+          </div>
+          <div className={`flex h-24 items-center justify-center text-pink-300 ${artWindow}`}>
+            <div
+              aria-hidden="true"
+              className="absolute inset-0 bg-[radial-gradient(circle_at_50%_120%,rgba(250,10,169,0.35),transparent_60%)]"
+            />
+            <FeatureIcon id={feature.id} className="relative h-12 w-12 transition duration-300 group-hover:scale-110" />
+          </div>
+          <div className={cardBar}>
+            <p className="text-sm font-semibold leading-tight">{feature.typeLine}</p>
+            <SetSymbol />
+          </div>
+          <div className={`relative flex flex-1 flex-col gap-3 text-sm ${textBox}`}>
+            <p className="leading-relaxed">{feature.body}</p>
+            <p className={flavorText}>{feature.flavor}</p>
+            {feature.pt ? (
+              <span className="absolute -bottom-3 right-3 rounded-md border border-purple-200/60 bg-gradient-to-r from-purple-700 to-purple-800 px-2 py-0.5 text-sm font-bold text-white">
+                {feature.pt}
+              </span>
+            ) : null}
+          </div>
+          <div className="flex items-center justify-between gap-3 px-1 pt-1 text-xs text-gray-400">
+            <span>{String(number).padStart(3, "0")}/006</span>
+            <span className="font-semibold text-pink-300 group-hover:text-pink-200">
+              {feature.signedIn ? "Sign in to use" : "Try it now"} &rarr;
+            </span>
+          </div>
+        </article>
+      </TapLink>
+    </TapCard>
   );
 }
 
@@ -247,18 +255,22 @@ export default function Landing({ featuredCards, cardCount }: LandingProps) {
           Keep or mulligan?
         </h2>
         <p className={`mx-auto mt-3 max-w-lg text-lg ${mutedText}`}>
-          Sign in and start sorting your cards, or ship it back and search around first.
-          Nobody&apos;s counting your mulligans.
+          Sign in and start sorting your cards, or ship it back and search around first. Nobody&apos;s counting your
+          mulligans.
         </p>
         <div className="mt-6 flex flex-wrap justify-center gap-3">
-          <Link href={signInHref("/")} className={`flex-col !gap-0 px-8 ${primaryAction}`}>
-            <span className="text-lg">Keep</span>
-            <span className="text-xs font-medium text-pink-100">Sign in, it&apos;s free</span>
-          </Link>
-          <Link href="/search" className={`flex-col !gap-0 px-8 ${secondaryAction}`}>
-            <span className="text-lg">Mulligan</span>
-            <span className={`text-xs font-medium ${mutedText}`}>Just search cards</span>
-          </Link>
+          <TapCard colors={KEEP_COLORS}>
+            <TapLink href={signInHref("/")} className={`flex-col !gap-0 px-8 ${primaryAction}`}>
+              <span className="text-lg">Keep</span>
+              <span className="text-xs font-medium text-pink-100">Sign in, it&apos;s free</span>
+            </TapLink>
+          </TapCard>
+          <TapCard colors={MULLIGAN_COLORS}>
+            <TapLink href="/search" className={`flex-col !gap-0 px-8 ${secondaryAction}`}>
+              <span className="text-lg">Mulligan</span>
+              <span className={`text-xs font-medium ${mutedText}`}>Just search cards</span>
+            </TapLink>
+          </TapCard>
         </div>
       </section>
 

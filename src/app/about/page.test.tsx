@@ -29,14 +29,20 @@ describe("About page", () => {
     expect(screen.getByText(/Not approved\/endorsed by Wizards/i)).toBeTruthy();
   });
 
-  test("links to the project board and the issue tracker", () => {
+  test("links to the project board, new issues, discussions and the contributing guide", () => {
     render(<About />);
 
     expect(screen.getByRole("link", { name: "project board" }).getAttribute("href")).toBe(
       "https://github.com/users/mathewmorris/projects/2?pane=info",
     );
     expect(screen.getByRole("link", { name: "Open an issue on GitHub" }).getAttribute("href")).toBe(
-      "https://github.com/mathewmorris/magic-vault/issues",
+      "https://github.com/mathewmorris/magic-vault/issues/new/choose",
+    );
+    expect(screen.getByRole("link", { name: "GitHub Discussions" }).getAttribute("href")).toBe(
+      "https://github.com/mathewmorris/magic-vault/discussions",
+    );
+    expect(screen.getByRole("link", { name: "contributing guide" }).getAttribute("href")).toBe(
+      "https://github.com/mathewmorris/magic-vault/blob/main/CONTRIBUTING.md",
     );
   });
 

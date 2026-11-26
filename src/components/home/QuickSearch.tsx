@@ -1,8 +1,13 @@
+"use client";
+
 import { MAX_QUERY_LENGTH } from "~/utils/search/searchOptions";
+
+import { useTapCard } from "./TapCard";
 
 /**
  * A card search box that sends you to /search?q=... It's a plain GET form,
- * so it works before the page's JavaScript loads.
+ * so it works before the page's JavaScript loads. On a card (inside a
+ * TapCard), searching taps the card first.
  */
 export default function QuickSearch({
   autoFocus = false,
@@ -11,8 +16,21 @@ export default function QuickSearch({
   autoFocus?: boolean;
   placeholder?: string;
 }) {
+  const card = useTapCard();
+
+  function onSubmit(event: React.FormEvent<HTMLFormElement>) {
+    if (!card) return;
+    event.preventDefault();
+    // The same URL the form would go to on its own.
+    const params = new URLSearchParams();
+    new FormData(event.currentTarget).forEach((value, key) => {
+      if (typeof value === "string") params.append(key, value);
+    });
+    card.tap(`/search?${params.toString()}`);
+  }
+
   return (
-    <form action="/search" method="get" role="search" className="flex w-full max-w-xl gap-2">
+    <form action="/search" method="get" role="search" onSubmit={onSubmit} className="flex w-full max-w-xl gap-2">
       <label htmlFor="quick-search" className="sr-only">
         Search cards
       </label>

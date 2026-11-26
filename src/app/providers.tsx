@@ -7,6 +7,7 @@ import { SessionProvider } from "next-auth/react";
 import { type Session } from "next-auth";
 import superjson from "superjson";
 
+import SpellProvider from "~/components/home/SpellProvider";
 import { ToastProvider } from "~/components/toast";
 import { api } from "~/utils/api";
 
@@ -42,7 +43,9 @@ export function Providers({
     <SessionProvider session={session}>
       <api.Provider client={trpcClient} queryClient={queryClient}>
         <QueryClientProvider client={queryClient}>
-          <ToastProvider>{children}</ToastProvider>
+          <ToastProvider>
+            <SpellProvider>{children}</SpellProvider>
+          </ToastProvider>
         </QueryClientProvider>
       </api.Provider>
     </SessionProvider>

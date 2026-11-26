@@ -12,9 +12,30 @@ export default {
           from: { opacity: '0', transform: 'translateY(0.5rem)' },
           to: { opacity: '1', transform: 'translateY(0)' },
         },
+        // The spell a card casts when it taps (see SpellProvider). A wash of
+        // color spreads out and fades while colored pips swirl away from it.
+        'spell-wash': {
+          '0%': { opacity: '0', transform: 'scale(0.05)' },
+          '30%': { opacity: '0.9' },
+          '65%': { opacity: '0.7', transform: 'scale(1)' },
+          '100%': { opacity: '0', transform: 'scale(1.08)' },
+        },
+        'spell-swirl': {
+          from: { transform: 'rotate(0deg)' },
+          to: { transform: 'rotate(150deg)' },
+        },
+        'spell-pip': {
+          '0%': { opacity: '0', transform: 'translate(-50%, -50%) translateX(0) scale(0.3)' },
+          '15%': { opacity: '1' },
+          '70%': { opacity: '1' },
+          '100%': { opacity: '0', transform: 'translate(-50%, -50%) translateX(var(--pip-distance)) scale(1.2)' },
+        },
       },
       animation: {
         'toast-in': 'toast-in 150ms ease-out',
+        'spell-wash': 'spell-wash 650ms cubic-bezier(0.22, 1, 0.36, 1) both',
+        'spell-swirl': 'spell-swirl 650ms cubic-bezier(0.22, 1, 0.36, 1) both',
+        'spell-pip': 'spell-pip 580ms cubic-bezier(0.16, 1, 0.3, 1) both',
       },
       container: {
         padding: {

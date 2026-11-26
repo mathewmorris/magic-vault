@@ -17,7 +17,9 @@ export const metadata: Metadata = {
 };
 
 const PROJECT_BOARD_URL = "https://github.com/users/mathewmorris/projects/2?pane=info";
-const ISSUES_URL = "https://github.com/mathewmorris/magic-vault/issues";
+const NEW_ISSUE_URL = "https://github.com/mathewmorris/magic-vault/issues/new/choose";
+const DISCUSSIONS_URL = "https://github.com/mathewmorris/magic-vault/discussions";
+const CONTRIBUTING_URL = "https://github.com/mathewmorris/magic-vault/blob/main/CONTRIBUTING.md";
 
 const linkClass = "font-semibold text-pink-600 underline dark:text-pink-400";
 
@@ -153,10 +155,22 @@ export default function About() {
           </a>{" "}
           shows what&apos;s being worked on and what&apos;s coming next. Found a bug, or thought of
           a card this set is missing?{" "}
-          <a href={ISSUES_URL} className={linkClass} target="_blank" rel="noreferrer">
+          <a href={NEW_ISSUE_URL} className={linkClass} target="_blank" rel="noreferrer">
             Open an issue on GitHub
           </a>
           .
+        </p>
+        <p className={mutedText}>
+          Want to playtest an idea before it&apos;s a card, or just say how it&apos;s going? Pull up a
+          seat in{" "}
+          <a href={DISCUSSIONS_URL} className={linkClass} target="_blank" rel="noreferrer">
+            GitHub Discussions
+          </a>
+          . Want to design a card yourself? The{" "}
+          <a href={CONTRIBUTING_URL} className={linkClass} target="_blank" rel="noreferrer">
+            contributing guide
+          </a>{" "}
+          has the rules for getting your code into the next set.
         </p>
         {env.NEXT_PUBLIC_DONATION_URL && (
           <p className={mutedText}>

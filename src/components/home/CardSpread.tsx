@@ -1,16 +1,13 @@
 import Image from "next/image";
-import Link from "next/link";
-
 import { FEATURED_CARD_NAMES, type FeaturedCard } from "~/server/featuredCards";
+
+import TapCard from "./TapCard";
+import TapLink from "./TapLink";
 
 // Tilt and lift for each slot, left to right. The cards never overlap, so
 // no card covers another's artist credit or copyright line (Scryfall's image
 // guidelines ask for that).
-const SLOTS = [
-  "-rotate-6 translate-y-4",
-  "z-10 -translate-y-2",
-  "rotate-6 translate-y-4",
-];
+const SLOTS = ["-rotate-6 translate-y-4", "z-10 -translate-y-2", "rotate-6 translate-y-4"];
 
 /**
  * Three card images, fanned out a little, for the home page hero. A card
@@ -29,19 +26,27 @@ export default function CardSpread({ cards }: { cards: FeaturedCard[] }) {
         {FEATURED_CARD_NAMES.map((name, index) => {
           const card = byName.get(name);
           return (
-            <li key={name} className={`transition duration-300 hover:-translate-y-3 hover:rotate-0 ${SLOTS[index] ?? ""}`}>
+            <li
+              key={name}
+              className={`transition duration-300 hover:-translate-y-3 hover:rotate-0 ${SLOTS[index] ?? ""}`}
+            >
               {card ? (
-                <Link href={`/card/${card.id}`} className="block rounded-[4.75%/3.5%] shadow-xl shadow-purple-950/40 hover:drop-shadow-glow">
-                  <Image
-                    src={card.imageUrl}
-                    width={488}
-                    height={680}
-                    sizes="(min-width: 640px) 150px, 30vw"
-                    alt={card.name}
-                    priority
-                    className="h-auto w-full rounded-[4.75%/3.5%]"
-                  />
-                </Link>
+                <TapCard>
+                  <TapLink
+                    href={`/card/${card.id}`}
+                    className="block rounded-[4.75%/3.5%] shadow-xl shadow-purple-950/40 hover:drop-shadow-glow"
+                  >
+                    <Image
+                      src={card.imageUrl}
+                      width={488}
+                      height={680}
+                      sizes="(min-width: 640px) 150px, 30vw"
+                      alt={card.name}
+                      priority
+                      className="h-auto w-full rounded-[4.75%/3.5%]"
+                    />
+                  </TapLink>
+                </TapCard>
               ) : (
                 <div className="flex aspect-[488/680] items-center justify-center rounded-[4.75%/3.5%] border-2 border-purple-300 bg-gradient-to-br from-purple-500 via-purple-700 to-pink-700 p-2 text-center text-xs font-semibold text-white shadow-xl shadow-purple-950/40 sm:text-sm">
                   {name}
