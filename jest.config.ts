@@ -13,7 +13,9 @@ const config: Config = {
   // Integration tests need a real database; run them with `npm run test:integration`.
   testPathIgnorePatterns: ['/node_modules/', '/.next/', '/e2e/', '\\.integration\\.test\\.ts$'],
   moduleNameMapper: {
-    "^singleton$": "<rootDir>/singleton.ts"
+    "^singleton$": "<rootDir>/singleton.ts",
+    // The tsconfig "~/" alias, so jest.mock("~/...") resolves like imports do.
+    "^~/(.*)$": "<rootDir>/src/$1",
   },
   setupFilesAfterEnv: ['<rootDir>/singleton.ts'],
   clearMocks: true,

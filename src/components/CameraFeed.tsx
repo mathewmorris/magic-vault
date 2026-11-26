@@ -14,6 +14,13 @@ interface CameraFeedProps {
   overlay?: React.ReactNode;
   disabled?: boolean;
   captureLabel?: string;
+  /**
+   * Called once the stream is playing with a function that snapshots the
+   * current frame (a new canvas each call, or null if there's no frame yet),
+   * and with null when the feed goes away. For callers that look at frames
+   * continuously, e.g. live card detection.
+   */
+  onFrameSource?: (grab: (() => HTMLCanvasElement | null) | null) => void;
 }
 
 /**
@@ -27,6 +34,7 @@ export default function CameraFeed({
   overlay,
   disabled = false,
   captureLabel = "Capture",
+  onFrameSource,
 }: CameraFeedProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [ready, setReady] = useState(false);
@@ -79,19 +87,35 @@ export default function CameraFeed({
     onReady?.({ width: video.videoWidth, height: video.videoHeight });
   }, [onReady]);
 
-  const capture = useCallback(() => {
+  const grabFrame = useCallback((): HTMLCanvasElement | null => {
     const video = videoRef.current;
-    if (!video || video.videoWidth === 0) return;
+    if (!video || video.videoWidth === 0) return null;
 
     const canvas = document.createElement("canvas");
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
     const ctx = canvas.getContext("2d");
-    if (!ctx) return;
+    if (!ctx) return null;
 
     ctx.drawImage(video, 0, 0);
-    onCapture(canvas);
-  }, [onCapture]);
+    return canvas;
+  }, []);
+
+  const capture = useCallback(() => {
+    const canvas = grabFrame();
+    if (canvas) onCapture(canvas);
+  }, [grabFrame, onCapture]);
+
+  // Hand out the frame grabber once frames exist, and take it back on unmount.
+  const onFrameSourceRef = useRef(onFrameSource);
+  useEffect(() => {
+    onFrameSourceRef.current = onFrameSource;
+  }, [onFrameSource]);
+  useEffect(() => {
+    if (!ready) return;
+    onFrameSourceRef.current?.(grabFrame);
+    return () => onFrameSourceRef.current?.(null);
+  }, [ready, grabFrame]);
 
   return (
     <div className="flex flex-col items-center gap-4">

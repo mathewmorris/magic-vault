@@ -90,4 +90,19 @@ describe("ScanMatches", () => {
     expect(screen.queryByRole("button", { name: /^Add / })).toBeNull();
     expect(screen.queryByRole("link", { name: "Sign in" })).toBeNull();
   });
+
+  test("shows which printing a match is when known", () => {
+    setup({
+      matches: [{ ...matches[0]!, detail: "M11 #149 · EN" }, matches[1]!],
+    });
+
+    expect(screen.getByRole("button", { name: /Lightning Bolt M11 #149 · EN 95% match/ })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Lightning Blast 80% match/ }).textContent).not.toContain("#");
+  });
+
+  test("a custom heading replaces the query heading", () => {
+    setup({ heading: "Best matches" });
+
+    expect(screen.getByRole("heading", { level: 2 }).textContent).toBe("Best matches");
+  });
 });

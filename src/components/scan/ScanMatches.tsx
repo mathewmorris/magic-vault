@@ -9,10 +9,14 @@ export interface MatchOption {
   name: string;
   score: number;
   imageUrl: string | null;
+  /** Which printing this is, e.g. "M21 #157 · EN". */
+  detail?: string;
 }
 
 interface ScanMatchesProps {
   query: string;
+  /** Replaces the "Best matches for ..." heading. */
+  heading?: string;
   matches: MatchOption[];
   selectedId: string | null;
   onSelect: (cardId: string) => void;
@@ -37,6 +41,7 @@ interface ScanMatchesProps {
  */
 export default function ScanMatches({
   query,
+  heading,
   matches,
   selectedId,
   onSelect,
@@ -54,7 +59,7 @@ export default function ScanMatches({
   return (
     <section className="flex flex-col gap-4">
       <div>
-        <h2 className="text-xl font-semibold">Best matches for &quot;{query}&quot;</h2>
+        <h2 className="text-xl font-semibold">{heading ?? <>Best matches for &quot;{query}&quot;</>}</h2>
         <p className="text-sm text-gray-400">Not the right one? Tap the card you scanned.</p>
       </div>
 
@@ -85,6 +90,7 @@ export default function ScanMatches({
                   </div>
                 )}
                 <span className="font-semibold">{match.name}</span>
+                {match.detail && <span className="text-xs text-gray-300">{match.detail}</span>}
                 <span className="text-xs text-gray-400">{Math.round(match.score * 100)}% match</span>
               </button>
             </li>
