@@ -1,8 +1,8 @@
 name: Migrate database
-# Neon is being shut down (Nov 2026), so this no longer runs on every push to main.
-# Run it by hand from the Actions tab once a new database is set up.
 on:
-  workflow_dispatch:
+  push:
+    branches:
+      - main
 
 jobs:
   migrate:
