@@ -1,0 +1,41 @@
+name: CI
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  check:
+    name: Lint, test, build
+    runs-on: ubuntu-latest
+    env:
+      SKIP_ENV_VALIDATION: "true"
+      DATABASE_URL: "postgresql://postgres:postgres@localhost:5432/magicvault"
+      NEXTAUTH_SECRET: "ci"
+      NEXTAUTH_URL: "http://localhost:3000"
+      DISCORD_CLIENT_ID: "ci"
+      DISCORD_CLIENT_SECRET: "ci"
+      GITHUB_ID: "ci"
+      GITHUB_SECRET: "ci"
+      GOOGLE_ID: "ci"
+      GOOGLE_SECRET: "ci"
+      EMAIL_SERVER: "smtp://localhost:1025"
+      EMAIL_FROM: "noreply@magicvault.local"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Unit tests
+        run: npm test -- --ci
+
+      - name: Build
+        run: npm run build

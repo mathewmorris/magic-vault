@@ -2,7 +2,11 @@
 const config = {
   parser: "@typescript-eslint/parser",
   parserOptions: {
-    project: true,
+    // tsconfig.json leaves test files out so `next build` doesn't type-check
+    // them, but ESLint still lints them. Point the parser at a tsconfig that
+    // includes tests so it can parse them.
+    project: "./tsconfig.eslint.json",
+    tsconfigRootDir: __dirname,
   },
   plugins: ["@typescript-eslint"],
   extends: [
