@@ -4,7 +4,11 @@ import { appRouter } from "../root";
 import { TRPCError } from "@trpc/server";
 import { type CardsOnCollections, type Collection } from "@prisma/client";
 import { buildCard } from "../../testing/cardFixture";
+import { buyLinks } from "~/utils/buyLinks";
 import { toCardEntries } from "./collection";
+
+// Buy links are checked against the switch being off, whatever the local .env says.
+jest.mock("../../affiliate", () => ({ affiliateConfig: () => ({ enabled: false }) }));
 
 describe("collection card procedures", () => {
     const userId = "user123";
@@ -77,9 +81,9 @@ describe("collection card procedures", () => {
             await expect(
                 authedCaller().collection.cards({ collectionId })
             ).resolves.toStrictEqual([
-                { card: mox, finish: "nonfoil", count: 2 },
-                { card: lotus, finish: "nonfoil", count: 1 },
-                { card: mox, finish: "foil", count: 1 },
+                { card: mox, finish: "nonfoil", count: 2, buyLinks: buyLinks(mox) },
+                { card: lotus, finish: "nonfoil", count: 1, buyLinks: buyLinks(lotus) },
+                { card: mox, finish: "foil", count: 1, buyLinks: buyLinks(mox) },
             ]);
         });
 
@@ -105,7 +109,7 @@ describe("collection card procedures", () => {
 
             await expect(
                 authedCaller().collection.cards({ collectionId })
-            ).resolves.toStrictEqual([{ card: lotus, finish: "nonfoil", count: 1 }]);
+            ).resolves.toStrictEqual([{ card: lotus, finish: "nonfoil", count: 1, buyLinks: buyLinks(lotus) }]);
         });
 
         test("throws FORBIDDEN for someone else's collection", async () => {

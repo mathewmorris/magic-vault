@@ -3,11 +3,13 @@
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import Button from "~/components/Button";
+import { AffiliateDisclosure } from "~/components/BuyLinks";
 import CollectionCards from "~/components/CollectionCards";
 import CollectionName from "~/components/CollectionName";
 import SearchBar from "~/components/SearchBar";
 import { useToast } from "~/components/toast";
 import { api } from "~/utils/api";
+import { anyAffiliate } from "~/utils/buyLinks";
 import { collectionValue, formatUsd, unpricedLabel, type Finish } from "~/utils/price";
 import { collectionLabel, mutationErrorMessage } from "~/utils/toastMessages";
 
@@ -240,6 +242,11 @@ export default function Page() {
             </Button>
           </div>
         ) : cardsQuery.data ? (
+          <>
+          {/* One line above the grid, so it's read before any store link. */}
+          {cardsQuery.data.some(({ buyLinks }) => anyAffiliate(buyLinks)) && (
+            <AffiliateDisclosure className="mb-4" />
+          )}
           <CollectionCards
             cards={cardsQuery.data}
             editable={!isDeleted}
@@ -249,6 +256,7 @@ export default function Page() {
             onRemove={(cardId, finish) => removeCard.mutate({ collectionId: collection.id, cardId, finish, all: true })}
             onChangeFinish={(cardId, from, to) => setFinish.mutate({ collectionId: collection.id, cardId, from, to })}
           />
+          </>
         ) : (
           <p>Loading cards...</p>
         )}

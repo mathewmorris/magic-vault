@@ -13,6 +13,7 @@ import {
   type Finish,
 } from "~/utils/price";
 import Button from "./Button";
+import BuyLinks from "./BuyLinks";
 
 export type CollectionCard = RouterOutputs["collection"]["cards"][number];
 
@@ -41,7 +42,7 @@ export default function CollectionCards({
 
   return (
     <ul className="grid grid-cols-2 gap-4 md:grid-cols-4 lg:grid-cols-5">
-      {cards.map(({ card, finish: storedFinish, count }) => {
+      {cards.map(({ card, finish: storedFinish, count, buyLinks }) => {
         const image = smallImageUrl(card);
         // The API only ever stores one of the known finishes.
         const finish: Finish = isFinish(storedFinish) ? storedFinish : "nonfoil";
@@ -98,6 +99,7 @@ export default function CollectionCards({
                 formatUsd(price)
               )}
             </p>
+            <BuyLinks links={buyLinks} cardName={card.name} variant="compact" />
             {editable ? (
               <div className="flex items-center gap-2">
                 <Button

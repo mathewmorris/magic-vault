@@ -4,6 +4,8 @@ import { createInnerTRPCContext } from "../trpc";
 import { appRouter } from "../root";
 import { isScryfallFallbackEnabled, scryfall } from "../../scryfall/client";
 import { buildCard, emptyCardRowFields } from "../../testing/cardFixture";
+import { affiliateConfig } from "../../affiliate";
+import { buyLinks } from "~/utils/buyLinks";
 import { PRINTINGS_LIMIT } from "./card";
 
 jest.mock("../../scryfall/client", () => ({
@@ -20,6 +22,9 @@ const searchByName = scryfall.searchByName as jest.MockedFunction<
 >;
 const getRulings = scryfall.getRulings as jest.MockedFunction<typeof scryfall.getRulings>;
 
+jest.mock("../../affiliate", () => ({ affiliateConfig: jest.fn(() => ({ enabled: false })) }));
+const mockedAffiliateConfig = affiliateConfig as jest.MockedFunction<typeof affiliateConfig>;
+
 describe("card procedures", () => {
   const callerWithoutSession = () => {
     const ctx = createInnerTRPCContext({ session: null });
@@ -29,6 +34,7 @@ describe("card procedures", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     fallbackEnabled.mockReturnValue(false);
+    mockedAffiliateConfig.mockReturnValue({ enabled: false });
   });
 
   describe("byId", () => {
@@ -52,7 +58,12 @@ describe("card procedures", () => {
 
       const result = await callerWithoutSession().card.byId({ id: "a" });
 
-      expect(result).toStrictEqual({ ...card, printings, hasMorePrintings: false });
+      expect(result).toStrictEqual({
+        ...card,
+        printings,
+        hasMorePrintings: false,
+        buyLinks: buyLinks(card),
+      });
       expect(prismaMock.card.findUnique).toHaveBeenCalledWith({ where: { id: "a" } });
     });
 
@@ -97,8 +108,33 @@ describe("card procedures", () => {
 
       const result = await callerWithoutSession().card.byId({ id: "a" });
 
-      expect(result).toStrictEqual({ ...card, printings: [], hasMorePrintings: false });
+      expect(result).toStrictEqual({
+        ...card,
+        printings: [],
+        hasMorePrintings: false,
+        buyLinks: buyLinks(card),
+      });
       expect(prismaMock.card.findMany).not.toHaveBeenCalled();
+    });
+
+    test("buy links carry no affiliate tracking while the switch is off", async () => {
+      prismaMock.card.findUnique.mockResolvedValue(buildCard({ id: "a" }));
+
+      const result = await callerWithoutSession().card.byId({ id: "a" });
+
+      expect(result.buyLinks.map((link) => link.store)).toEqual(["tcgplayer", "cardkingdom", "cardmarket"]);
+      expect(result.buyLinks.some((link) => link.affiliate)).toBe(false);
+    });
+
+    test("buy links use the affiliate settings when the switch is on", async () => {
+      mockedAffiliateConfig.mockReturnValue({ enabled: true, cardKingdomPartner: "magicvault" });
+      prismaMock.card.findUnique.mockResolvedValue(buildCard({ id: "a" }));
+
+      const result = await callerWithoutSession().card.byId({ id: "a" });
+
+      const ck = result.buyLinks.find((link) => link.store === "cardkingdom");
+      expect(ck?.affiliate).toBe(true);
+      expect(ck?.href).toContain("partner=magicvault");
     });
 
     test("throws NOT_FOUND for an unknown id", async () => {

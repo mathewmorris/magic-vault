@@ -61,6 +61,29 @@ export const env = createEnv({
     // turns on when both are set (see src/server/auth.ts).
     EMAIL_SERVER: z.string().optional(),
     EMAIL_FROM: z.string().email().optional(),
+
+    // Affiliate buy links (see src/utils/buyLinks.ts). Off unless
+    // AFFILIATE_LINKS is "on". While off, buy links still show and use
+    // Scryfall's own store links. Each ID is optional: a store without one
+    // keeps Scryfall's link even while the switch is on.
+    AFFILIATE_LINKS: z.preprocess(
+      (str) => (typeof str === "string" && str.trim() !== "" ? str.trim().toLowerCase() : undefined),
+      z.enum(["on", "off"]).default("off")
+    ),
+    TCGPLAYER_AFFILIATE_URL: z.preprocess(
+      (str) => (str === "" ? undefined : str),
+      z
+        .string()
+        .url()
+        .refine((url) => url.startsWith("https://"), {
+          message: "TCGPLAYER_AFFILIATE_URL must be an https URL",
+        })
+        .optional()
+    ),
+    CARDKINGDOM_PARTNER_ID: z.preprocess(
+      (str) => (str === "" ? undefined : str),
+      z.string().regex(/^[\w-]+$/, "CARDKINGDOM_PARTNER_ID may only use letters, digits, _ and -").optional()
+    ),
   },
 
   /**
@@ -100,6 +123,9 @@ export const env = createEnv({
     GOOGLE_SECRET: process.env.GOOGLE_SECRET,
     EMAIL_SERVER: process.env.EMAIL_SERVER,
     EMAIL_FROM: process.env.EMAIL_FROM,
+    AFFILIATE_LINKS: process.env.AFFILIATE_LINKS,
+    TCGPLAYER_AFFILIATE_URL: process.env.TCGPLAYER_AFFILIATE_URL,
+    CARDKINGDOM_PARTNER_ID: process.env.CARDKINGDOM_PARTNER_ID,
     NEXT_PUBLIC_DONATION_URL: process.env.NEXT_PUBLIC_DONATION_URL,
   },
   /**

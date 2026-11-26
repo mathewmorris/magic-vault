@@ -8,7 +8,9 @@ import {
   cronProcedure,
   protectedProcedure,
 } from "~/server/api/trpc";
+import { affiliateConfig } from "~/server/affiliate";
 import { verifyCollectionOwnership } from "~/server/api/util";
+import { buyLinks } from "~/utils/buyLinks";
 import {
   cardFinishes,
   collectionValue,
@@ -229,10 +231,11 @@ export const collectionRouter = createTRPCRouter({
         },
       })
       const cardsById = new Map(cards.map(card => [card.id, card]));
+      const affiliate = affiliateConfig();
 
       return entries.flatMap(({ cardId, finish, count }) => {
         const card = cardsById.get(cardId);
-        return card ? [{ card, finish, count }] : [];
+        return card ? [{ card, finish, count, buyLinks: buyLinks(card, affiliate) }] : [];
       });
     }),
 
