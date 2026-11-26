@@ -39,3 +39,39 @@ jobs:
 
       - name: Build
         run: npm run build
+
+  broker:
+    name: Scryfall broker tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      # On a PR, HEAD is the merge commit and HEAD^1 is the base branch.
+      - name: Check for broker changes
+        id: changes
+        run: |
+          if [ "$GITHUB_EVENT_NAME" != "pull_request" ] || \
+             git diff --name-only HEAD^1 HEAD | grep -qE '^(scryfall-data-broker/|\.github/workflows/(ci|scryfall-sync)\.yml$)'; then
+            echo "broker=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "No broker changes, skipping."
+          fi
+
+      - uses: actions/setup-python@v5
+        if: steps.changes.outputs.broker == 'true'
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: scryfall-data-broker/requirements.txt
+
+      - name: Install
+        if: steps.changes.outputs.broker == 'true'
+        working-directory: scryfall-data-broker
+        run: pip install -r requirements.txt
+
+      - name: Unit tests
+        if: steps.changes.outputs.broker == 'true'
+        working-directory: scryfall-data-broker
+        run: python -m unittest -v
