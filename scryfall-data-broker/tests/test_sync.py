@@ -82,10 +82,16 @@ class RowHashTest(unittest.TestCase):
                          sync.row_hash({'b': {'y': 2, 'x': 1}, 'a': 1}))
 
     def test_only_stored_columns_count(self):
-        # Prices change daily; we don't store them, so no update.
+        # edhrec_rank isn't stored, so a change to it makes no update.
+        a = card('a', edhrec_rank=100)
+        b = card('a', edhrec_rank=200)
+        self.assertEqual(hashes_for([a]), hashes_for([b]))
+
+    def test_price_change_counts(self):
+        # Prices are stored, so a daily price move is an update.
         a = card('a', prices={'usd': '1.00'})
         b = card('a', prices={'usd': '9.00'})
-        self.assertEqual(hashes_for([a]), hashes_for([b]))
+        self.assertNotEqual(hashes_for([a]), hashes_for([b]))
 
 
 class SyncPlanTest(unittest.TestCase):
@@ -111,6 +117,15 @@ class SyncPlanTest(unittest.TestCase):
         self.assertEqual(plan.counts['UNCHANGED'], 1)
         self.assertEqual(plan.removed, ['gone'])
         self.assertNotIn('gone', plan.hashes)
+
+    def test_price_change_is_an_update(self):
+        old = [card('a')]
+        new = [card('a', prices={'usd': '0.25', 'usd_foil': '1.10'})]
+        plan = sync.SyncPlan(iter(new), hashes_for(old))
+        [op] = list(plan.operations())
+        self.assertEqual(op.kind, UPDATE)
+        self.assertEqual(op.fields['prices'],
+                         {'usd': '0.25', 'usd_foil': '1.10'})
 
     def test_rows_hold_only_stored_columns(self):
         plan = sync.SyncPlan(iter([card('a')]), {})

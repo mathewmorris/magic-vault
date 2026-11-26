@@ -43,6 +43,11 @@ model Card {
   finishes         Json?   @db.JsonB
   lang             String?
 
+  // Scryfall's prices object (usd, usd_foil, usd_etched, eur, ...; values are
+  // decimal strings or null) and purchase_uris. Refreshed by the daily sync.
+  prices           Json?   @db.JsonB
+  purchase_uris    Json?   @db.JsonB
+
   @@index([oracle_id])
   @@index([set, collector_number])
 }
@@ -70,11 +75,14 @@ model CardsOnCollections {
     collection    Collection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
     collectionId  String
     cardId        String
+    // Which printing finish these copies are: "nonfoil", "foil" or "etched".
+    // Part of the key, so a foil and a non-foil copy are separate entries.
+    finish        String     @default("nonfoil")
     count         Int        @default(1)
     createdAt     DateTime   @default(now())
     updatedAt     DateTime   @updatedAt
 
-    @@id([collectionId, cardId])
+    @@id([collectionId, cardId, finish])
 }
 
 // Necessary for Next auth

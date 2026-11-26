@@ -27,6 +27,8 @@ const bolt: ScryfallCard = {
   legalities: { modern: "legal", standard: "not_legal" },
   finishes: ["nonfoil"],
   lang: "en",
+  prices: { usd: "450.00", usd_foil: null, eur: null },
+  purchase_uris: { tcgplayer: "https://www.tcgplayer.com/product/1" },
 };
 
 describe("toCardRow", () => {
@@ -61,7 +63,15 @@ describe("toCardRow", () => {
       legalities: { modern: "legal", standard: "not_legal" },
       finishes: ["nonfoil"],
       lang: "en",
+      prices: { usd: "450.00", usd_foil: null, eur: null },
+      purchase_uris: { tcgplayer: "https://www.tcgplayer.com/product/1" },
     });
+  });
+
+  test("stores a card with no prices as a database null", () => {
+    const row = toCardRow({ ...bolt, prices: undefined, purchase_uris: null });
+    expect(row.prices).toBe(Prisma.DbNull);
+    expect(row.purchase_uris).toBe(Prisma.DbNull);
   });
 
   test("keeps cmc 0 instead of treating it as missing", () => {

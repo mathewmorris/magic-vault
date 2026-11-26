@@ -39,6 +39,8 @@ export function toCardRow(card: ScryfallCard): Prisma.CardCreateManyInput {
     legalities: json(card.legalities),
     finishes: json(card.finishes),
     lang: card.lang ?? null,
+    prices: json(card.prices),
+    purchase_uris: json(card.purchase_uris),
   };
 }
 

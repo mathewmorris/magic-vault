@@ -3,9 +3,30 @@
 import Link from "next/link";
 import { type Collection } from "@prisma/client";
 import Spinner from "~/components/Spinner";
-import { api } from "~/utils/api";
+import { api, type RouterOutputs } from "~/utils/api";
+import { formatUsd, unpricedLabel } from "~/utils/price";
 
-const CollectionList = ({ collections }: { collections: Collection[] }) => {
+type CollectionValues = RouterOutputs["collection"]["values"];
+
+const ValueLabel = ({ value }: { value: CollectionValues[string] | undefined }) => {
+  if (!value) return null;
+  return (
+    <span>
+      {formatUsd(value.totalCents)}
+      {value.unpriced > 0 && (
+        <span className="text-gray-400"> ({unpricedLabel(value.unpriced)})</span>
+      )}
+    </span>
+  );
+};
+
+const CollectionList = ({
+  collections,
+  values,
+}: {
+  collections: Collection[];
+  values: CollectionValues | undefined;
+}) => {
   if (collections.length < 1) {
     return (
       <>
@@ -15,8 +36,9 @@ const CollectionList = ({ collections }: { collections: Collection[] }) => {
   }
 
   return collections.map((collection) => (
-    <div key={collection.id}>
+    <div key={collection.id} className="flex gap-2">
       <span>{collection.name}</span>
+      <ValueLabel value={values?.[collection.id]} />
       <Link href={`/collection/${collection.id}`}>View Collection</Link>
     </div>
   ));
@@ -24,6 +46,8 @@ const CollectionList = ({ collections }: { collections: Collection[] }) => {
 
 export default function CollectionsIndex() {
   const { data: collections, isLoading } = api.collection.getAll.useQuery();
+  // Loads on its own so the list shows right away and the totals follow.
+  const { data: values } = api.collection.values.useQuery();
 
   return (
     <div>
@@ -32,7 +56,7 @@ export default function CollectionsIndex() {
       {isLoading ? (
         <Spinner label="Loading collections" />
       ) : (
-        <CollectionList collections={collections ?? []} />
+        <CollectionList collections={collections ?? []} values={values} />
       )}
     </div>
   );
