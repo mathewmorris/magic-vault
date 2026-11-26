@@ -2,10 +2,13 @@
 
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
+import { useState } from "react";
 import Button from "~/components/Button";
 import { AffiliateDisclosure } from "~/components/BuyLinks";
 import CollectionCards from "~/components/CollectionCards";
 import CollectionName from "~/components/CollectionName";
+import ExportMenu from "~/components/ExportMenu";
+import ImportPanel, { type ImportSummary } from "~/components/ImportPanel";
 import SearchBar from "~/components/SearchBar";
 import { useToast } from "~/components/toast";
 import { api } from "~/utils/api";
@@ -27,6 +30,8 @@ export default function Page() {
   const id = params?.id ?? "";
   const utils = api.useUtils();
   const toast = useToast();
+  const [importing, setImporting] = useState(false);
+  const [importMessage, setImportMessage] = useState<string | null>(null);
 
   // Both queries are keyed on the id from the URL rather than on each other's
   // results, so they start together on a reload or a client-side navigation,
@@ -103,6 +108,12 @@ export default function Page() {
     onSettled: () => Promise.all([refreshCards(), utils.collection.values.invalidate()]),
   });
 
+  async function finishImport({ cards }: ImportSummary) {
+    await Promise.all([refreshCards(), utils.collection.values.invalidate()]);
+    setImporting(false);
+    setImportMessage(`Added ${cards} ${cards === 1 ? "card" : "cards"}.`);
+  }
+
   // Wait for the change to land and the lists to refresh before leaving, so
   // the page we go back to doesn't show stale collections. Callbacks live on
   // useMutation (not on mutate) so they still run after router.back()
@@ -176,7 +187,20 @@ export default function Page() {
           editable={!isDeleted}
           onSave={(name) => rename.mutateAsync({ id: collection.id, name })}
         />
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          {!isDeleted && (
+            <Button
+              type="button"
+              aria-expanded={importing}
+              onClick={() => {
+                setImporting((current) => !current);
+                setImportMessage(null);
+              }}
+            >
+              Import
+            </Button>
+          )}
+          <ExportMenu collectionId={collection.id} />
           {isDeleted ? (
             <>
               <Button
@@ -205,6 +229,20 @@ export default function Page() {
           )}
         </div>
       </div>
+
+      {importing && !isDeleted && (
+        <ImportPanel
+          collectionId={collection.id}
+          onClose={() => setImporting(false)}
+          onImported={finishImport}
+        />
+      )}
+
+      {importMessage && (
+        <p role="status" className="text-green-400">
+          {importMessage}
+        </p>
+      )}
 
       {actionError && (
         <p role="alert" className="text-red-500">

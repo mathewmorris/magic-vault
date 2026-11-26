@@ -83,10 +83,47 @@ model CardsOnCollections {
     // Part of the key, so a foil and a non-foil copy are separate entries.
     finish        String     @default("nonfoil")
     count         Int        @default(1)
+    // Condition of these copies: "NM", "LP", "MP", "HP" or "DMG". Not part
+    // of the key; an import that adds to an existing entry keeps its value.
+    condition     String     @default("NM")
+    // Scryfall language code of these copies, like "en" or "ja".
+    language      String     @default("en")
     createdAt     DateTime   @default(now())
     updatedAt     DateTime   @updatedAt
 
     @@id([collectionId, cardId, finish])
+}
+
+model Deck {
+    id            String    @id @default(cuid())
+    name          String
+    // A format key from Scryfall's legalities ("commander", "modern", ...).
+    format        String    @default("commander")
+    description   String?
+    createdAt     DateTime  @default(now())
+    updatedAt     DateTime  @updatedAt
+    user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+    userId        String
+    deletedAt     DateTime?
+    cardEntries   CardsOnDecks[]
+
+    @@index([userId])
+}
+
+// One row per card per board in a deck, with how many copies are on it.
+// Like CardsOnCollections, cardId is deliberately not a foreign key to Card
+// so reloading the Card table never fails or empties decks. board is one of
+// "main", "side" or "commander".
+model CardsOnDecks {
+    deck          Deck      @relation(fields: [deckId], references: [id], onDelete: Cascade)
+    deckId        String
+    cardId        String
+    count         Int       @default(1)
+    board         String    @default("main")
+    createdAt     DateTime  @default(now())
+    updatedAt     DateTime  @updatedAt
+
+    @@id([deckId, cardId, board])
 }
 
 // Necessary for Next auth
@@ -126,6 +163,7 @@ model User {
     accounts      Account[]
     sessions      Session[]
     collections   Collection[]
+    decks         Deck[]
 }
 
 model VerificationToken {

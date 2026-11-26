@@ -21,6 +21,8 @@ describe("collection card procedures", () => {
         cardId: "card-1",
         finish: "nonfoil",
         count: 1,
+        condition: "NM",
+        language: "en",
         createdAt: dateNow,
         updatedAt: dateNow,
         ...overrides,
@@ -72,7 +74,7 @@ describe("collection card procedures", () => {
             const mox = buildCard({ id: "mox", name: "Mox Pearl" });
             prismaMock.cardsOnCollections.findMany.mockResolvedValue([
                 buildEntry({ cardId: "mox", count: 2 }),
-                buildEntry({ cardId: "lotus", count: 1 }),
+                buildEntry({ cardId: "lotus", count: 1, condition: "LP", language: "ja" }),
                 buildEntry({ cardId: "mox", finish: "foil", count: 1 }),
             ]);
             // The card lookup comes back in a different order on purpose.
@@ -81,9 +83,9 @@ describe("collection card procedures", () => {
             await expect(
                 authedCaller().collection.cards({ collectionId })
             ).resolves.toStrictEqual([
-                { card: mox, finish: "nonfoil", count: 2, buyLinks: buyLinks(mox) },
-                { card: lotus, finish: "nonfoil", count: 1, buyLinks: buyLinks(lotus) },
-                { card: mox, finish: "foil", count: 1, buyLinks: buyLinks(mox) },
+                { card: mox, finish: "nonfoil", condition: "NM", language: "en", count: 2, buyLinks: buyLinks(mox) },
+                { card: lotus, finish: "nonfoil", condition: "LP", language: "ja", count: 1, buyLinks: buyLinks(lotus) },
+                { card: mox, finish: "foil", condition: "NM", language: "en", count: 1, buyLinks: buyLinks(mox) },
             ]);
         });
 
@@ -109,7 +111,7 @@ describe("collection card procedures", () => {
 
             await expect(
                 authedCaller().collection.cards({ collectionId })
-            ).resolves.toStrictEqual([{ card: lotus, finish: "nonfoil", count: 1, buyLinks: buyLinks(lotus) }]);
+            ).resolves.toStrictEqual([{ card: lotus, finish: "nonfoil", condition: "NM", language: "en", count: 1, buyLinks: buyLinks(lotus) }]);
         });
 
         test("throws FORBIDDEN for someone else's collection", async () => {
@@ -270,7 +272,7 @@ describe("collection card procedures", () => {
 
         test("moves every copy to the new finish, keeping the entry's place", async () => {
             const createdAt = new Date("2026-01-01T00:00:00.000Z");
-            const source = buildEntry({ cardId: "lotus", count: 3, createdAt });
+            const source = buildEntry({ cardId: "lotus", count: 3, condition: "HP", language: "de", createdAt });
             const moved = buildEntry({ cardId: "lotus", finish: "foil", count: 3, createdAt });
             prismaMock.cardsOnCollections.findUnique.mockResolvedValue(source);
             prismaMock.cardsOnCollections.delete.mockResolvedValue(source);
@@ -283,7 +285,7 @@ describe("collection card procedures", () => {
             expect(prismaMock.cardsOnCollections.delete).toHaveBeenCalledWith({ where: key("nonfoil") });
             expect(prismaMock.cardsOnCollections.upsert).toHaveBeenCalledWith({
                 where: key("foil"),
-                create: { collectionId, cardId: "lotus", finish: "foil", count: 3, createdAt },
+                create: { collectionId, cardId: "lotus", finish: "foil", count: 3, condition: "HP", language: "de", createdAt },
                 update: { count: { increment: 3 } },
             });
         });
