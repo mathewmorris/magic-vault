@@ -8,6 +8,7 @@ import CollectionName from "~/components/CollectionName";
 import SearchBar from "~/components/SearchBar";
 import { useToast } from "~/components/toast";
 import { api } from "~/utils/api";
+import { collectionValue, formatUsd, unpricedLabel, type Finish } from "~/utils/price";
 import { collectionLabel, mutationErrorMessage } from "~/utils/toastMessages";
 
 const NO_RETRY_CODES = ["NOT_FOUND", "FORBIDDEN", "UNAUTHORIZED", "BAD_REQUEST"];
@@ -50,14 +51,16 @@ export default function Page() {
 
   // Shows a count change straight away, then lets the refetch confirm it.
   // Cards keep their spot because the server orders by when they were added,
-  // and a count change doesn't touch that.
-  async function changeCachedCount(cardId: string, change: number | "remove") {
+  // and a count change doesn't touch that. Without a finish (adding from
+  // search) the server picks the finish, so nothing changes until the refetch.
+  async function changeCachedCount(cardId: string, finish: Finish | undefined, change: number | "remove") {
     await utils.collection.cards.cancel({ collectionId: id });
     const previous = utils.collection.cards.getData({ collectionId: id });
+    if (finish === undefined) return { previous };
 
     utils.collection.cards.setData({ collectionId: id }, (cards) =>
       cards?.flatMap((entry) => {
-        if (entry.card.id !== cardId) return [entry];
+        if (entry.card.id !== cardId || entry.finish !== finish) return [entry];
         if (change === "remove") return [];
         const count = entry.count + change;
         return count > 0 ? [{ ...entry, count }] : [];
@@ -81,15 +84,21 @@ export default function Page() {
   });
 
   const addCard = api.collection.addCard.useMutation({
-    onMutate: ({ cardId }) => changeCachedCount(cardId, 1),
+    onMutate: ({ cardId, finish }) => changeCachedCount(cardId, finish, 1),
     onError: (_error, _input, context) => rollback(context),
-    onSettled: () => refreshCards(),
+    onSettled: () => Promise.all([refreshCards(), utils.collection.values.invalidate()]),
   });
 
   const removeCard = api.collection.removeCard.useMutation({
-    onMutate: ({ cardId, all }) => changeCachedCount(cardId, all ? "remove" : -1),
+    onMutate: ({ cardId, finish, all }) => changeCachedCount(cardId, finish ?? "nonfoil", all ? "remove" : -1),
     onError: (_error, _input, context) => rollback(context),
-    onSettled: () => refreshCards(),
+    onSettled: () => Promise.all([refreshCards(), utils.collection.values.invalidate()]),
+  });
+
+  // Merging into an existing entry or keeping the old spot is the server's
+  // call, so this waits for the refetch instead of guessing.
+  const setFinish = api.collection.setFinish.useMutation({
+    onSettled: () => Promise.all([refreshCards(), utils.collection.values.invalidate()]),
   });
 
   // Wait for the change to land and the lists to refresh before leaving, so
@@ -152,7 +161,10 @@ export default function Page() {
   const lifecyclePending = softDelete.isLoading || recover.isLoading || destroy.isLoading;
   // Rename errors show next to the name field, and delete, recover and
   // permanent delete errors show as toasts, so they aren't repeated here.
-  const actionError = addCard.error ?? removeCard.error;
+  const actionError = addCard.error ?? removeCard.error ?? setFinish.error;
+  const value = cardsQuery.data
+    ? collectionValue(cardsQuery.data.map(({ card, finish, count }) => ({ prices: card.prices, finish, count })))
+    : null;
 
   return (
     <div className="flex flex-col gap-6 p-4">
@@ -200,6 +212,26 @@ export default function Page() {
 
       <section className="flex flex-col gap-4">
         <h2 className="text-xl">Cards</h2>
+        {value && cardsQuery.data && cardsQuery.data.length > 0 && (
+          <div className="flex flex-col gap-1">
+            <p>
+              Total value: <span className="font-semibold">{formatUsd(value.totalCents)}</span>
+              {value.unpriced > 0 && (
+                <span className="text-gray-400"> ({unpricedLabel(value.unpriced)})</span>
+              )}
+            </p>
+            <p className="text-sm text-gray-400">
+              <a
+                href="https://scryfall.com/docs/faqs"
+                target="_blank"
+                rel="noreferrer"
+                className="underline"
+              >
+                Prices from Scryfall, updated daily
+              </a>
+            </p>
+          </div>
+        )}
         {cardsQuery.isError ? (
           <div className="flex items-center gap-4">
             <p>Couldn&apos;t load the cards in this collection.</p>
@@ -211,9 +243,11 @@ export default function Page() {
           <CollectionCards
             cards={cardsQuery.data}
             editable={!isDeleted}
-            onIncrement={(cardId) => addCard.mutate({ collectionId: collection.id, cardId })}
-            onDecrement={(cardId) => removeCard.mutate({ collectionId: collection.id, cardId })}
-            onRemove={(cardId) => removeCard.mutate({ collectionId: collection.id, cardId, all: true })}
+            disabled={setFinish.isLoading}
+            onIncrement={(cardId, finish) => addCard.mutate({ collectionId: collection.id, cardId, finish })}
+            onDecrement={(cardId, finish) => removeCard.mutate({ collectionId: collection.id, cardId, finish })}
+            onRemove={(cardId, finish) => removeCard.mutate({ collectionId: collection.id, cardId, finish, all: true })}
+            onChangeFinish={(cardId, from, to) => setFinish.mutate({ collectionId: collection.id, cardId, from, to })}
           />
         ) : (
           <p>Loading cards...</p>

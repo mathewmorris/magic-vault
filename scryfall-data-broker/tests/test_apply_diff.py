@@ -63,7 +63,9 @@ class PlanOperationsTest(unittest.TestCase):
         self.assertEqual(op.fields["image_uris"],
                          {"small": "s.jpg", "normal": "n.jpg"})
         self.assertIsNone(op.fields["card_faces"])
-        self.assertNotIn("prices", op.fields)
+        self.assertEqual(op.fields["prices"], {"usd": "0.21"})
+        self.assertIsNone(op.fields["purchase_uris"])
+        self.assertNotIn("edhrec_rank", op.fields)
         self.assertEqual(set(op.fields),
                          {"id"} | set(apply_diff.STORED_FIELDS))
 
@@ -93,18 +95,53 @@ class PlanOperationsTest(unittest.TestCase):
 
     def test_changes_to_unstored_fields_make_no_operations(self):
         diff = {"values_changed": {
+            path(FOREST_ID, "edhrec_rank"):
+                {"new_value": 8189, "old_value": 8195},
+            path(FOREST_ID, "penny_rank"):
+                {"new_value": 10552, "old_value": 10564},
+        }}
+        self.assertEqual(apply_diff.plan_operations(diff), [])
+
+    def test_price_change_becomes_update_with_full_prices(self):
+        diff = {"values_changed": {
             path(FOREST_ID, "prices", "usd"):
                 {"new_value": "0.21", "old_value": "0.22"},
             path(FOREST_ID, "edhrec_rank"):
                 {"new_value": 8189, "old_value": 8195},
         }}
-        self.assertEqual(apply_diff.plan_operations(diff), [])
+        new_card = fake_card(prices={"usd": "0.21", "usd_foil": "0.62"})
+        [op] = apply_diff.plan_operations(diff, {FOREST_ID: new_card})
+        self.assertEqual(op, Operation(UPDATE, FOREST_ID, {
+            "prices": {"usd": "0.21", "usd_foil": "0.62"}}))
 
-    def test_real_events_file_only_has_price_and_rank_changes(self):
+    def test_price_change_without_new_cards_is_skipped(self):
+        diff = {"values_changed": {
+            path(FOREST_ID, "prices", "usd"):
+                {"new_value": "0.21", "old_value": "0.22"},
+        }}
+        [op] = apply_diff.plan_operations(diff)
+        self.assertEqual(op.kind, SKIP)
+        self.assertIn("prices", op.reason)
+
+    def test_real_events_file_only_touches_prices(self):
         here = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         with open(os.path.join(here, "events", "events_2024_10_10.json")) as f:
             diff = json.load(f)
-        self.assertEqual(apply_diff.plan_operations(diff), [])
+        priced = {apply_diff.parse_path(p)[0]
+                  for report in diff.values() for p in report
+                  if apply_diff.parse_path(p)[1] == "prices"}
+        self.assertTrue(priced)
+        # The file holds only nested price changes (and unstored ranks), so
+        # without the new cards every priced card is a skip naming prices.
+        ops = apply_diff.plan_operations(diff)
+        self.assertEqual({op.card_id for op in ops}, priced)
+        for op in ops:
+            self.assertEqual(op.kind, SKIP)
+            self.assertIn("prices", op.reason)
+        lookup = {card_id: fake_card() for card_id in priced}
+        ops = apply_diff.plan_operations(diff, lookup)
+        self.assertEqual({op.kind for op in ops}, {UPDATE})
+        self.assertEqual({tuple(op.fields) for op in ops}, {("prices",)})
 
     def test_top_level_value_change_becomes_update(self):
         diff = {"values_changed": {
@@ -112,8 +149,8 @@ class PlanOperationsTest(unittest.TestCase):
                 {"new_value": "highres_scan", "old_value": "lowres"},
             path(FOREST_ID, "name"):
                 {"new_value": "Forest", "old_value": "Forrest"},
-            path(FOREST_ID, "prices", "usd"):
-                {"new_value": "0.21", "old_value": "0.22"},
+            path(FOREST_ID, "edhrec_rank"):
+                {"new_value": 8189, "old_value": 8195},
         }}
         [op] = apply_diff.plan_operations(diff)
         self.assertEqual(op, Operation(UPDATE, FOREST_ID, {

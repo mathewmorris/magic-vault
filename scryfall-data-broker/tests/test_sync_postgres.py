@@ -57,8 +57,8 @@ class PostgresSyncTest(unittest.TestCase):
     def rows(self):
         self.conn.rollback()
         with self.conn.cursor() as cur:
-            cur.execute('SELECT id, name, layout, image_uris, all_parts '
-                        'FROM "Card" ORDER BY id')
+            cur.execute('SELECT id, name, layout, image_uris, all_parts, '
+                        'prices FROM "Card" ORDER BY id')
             return {r[0]: r[1:] for r in cur.fetchall()}
 
     def test_first_run_then_incremental_run(self):
@@ -71,18 +71,20 @@ class PostgresSyncTest(unittest.TestCase):
 
         changed = copy.deepcopy(self.cards)
         changed[0]['image_uris']['small'] = 'https://cards.scryfall.io/x.jpg'
-        changed[1]['prices'] = {'usd': '999.00'}  # not stored, no update
+        changed[1]['prices'] = dict(changed[1]['prices'], usd='999.00')
+        changed[2]['edhrec_rank'] = 999999  # not stored, no update
         removed = changed.pop()                   # left in place
         added = dict(copy.deepcopy(changed[0]), id='ffffffff-0000-0000-0000-'
                      '000000000001', name='Brand New Card')
         changed.append(added)
 
         out = self.apply(changed, updated_at='T2')
-        self.assertIn('1 new, 1 changed', out)
+        self.assertIn('1 new, 2 changed', out)
         self.assertIn('1 removed', out)
         rows = self.rows()
         self.assertEqual(rows[changed[0]['id']][2]['small'],
                          'https://cards.scryfall.io/x.jpg')
+        self.assertEqual(rows[changed[1]['id']][4]['usd'], '999.00')
         self.assertEqual(rows[added['id']][0], 'Brand New Card')
         self.assertIn(removed['id'], rows)
 

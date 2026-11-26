@@ -23,6 +23,8 @@ export const emptyCardFields = {
   legalities: null,
   finishes: null,
   lang: null,
+  prices: null,
+  purchase_uris: null,
 } satisfies Partial<Card>;
 
 /** What toCardRow writes for those columns when the Scryfall card has none. */
@@ -33,6 +35,8 @@ export const emptyCardRowFields = {
   keywords: Prisma.DbNull,
   legalities: Prisma.DbNull,
   finishes: Prisma.DbNull,
+  prices: Prisma.DbNull,
+  purchase_uris: Prisma.DbNull,
 };
 
 /** A Card row for tests, with the optional Scryfall columns empty. */

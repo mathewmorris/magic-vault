@@ -54,6 +54,8 @@ STORED_FIELDS = (
     "legalities",
     "finishes",
     "lang",
+    "prices",
+    "purchase_uris",
 )
 REQUIRED_FIELDS = ("name", "scryfall_uri", "image_status", "layout")
 JSON_FIELDS = (
@@ -65,6 +67,8 @@ JSON_FIELDS = (
     "keywords",
     "legalities",
     "finishes",
+    "prices",
+    "purchase_uris",
 )
 
 # Report types whose entries carry the new value, and where to find it.
@@ -88,7 +92,7 @@ class Operation:
 
 
 def parse_path(path: str) -> List[Any]:
-    """Split a DeepDiff path like ``root['abc']['prices'][0]`` into keys."""
+    """Split a DeepDiff path like ``root['abc']['card_faces'][0]`` into keys."""
     if not path.startswith("root"):
         raise ValueError(f"not a DeepDiff path: {path!r}")
     keys: List[Any] = []
@@ -152,8 +156,9 @@ def plan_operations(
     needed when the change is nested (``image_uris['small']``) or inside a
     list (``card_faces[0]``). Without it those cards are skipped.
 
-    Changes that only touch columns we don't store (prices, ranks, ...) make
-    no operation at all.
+    Changes that only touch columns we don't store (edhrec_rank, ...) make
+    no operation at all. Prices are stored, so a price change is an UPDATE
+    (with the full new ``prices`` object when ``new_cards_by_id`` is given).
     """
     inserts: List[Operation] = []
     skips: List[Operation] = []

@@ -47,7 +47,10 @@ production database (and on demand, dry run by default).
    streams the file card by card (ijson), hashes the columns the Card table
    stores, and compares with `state/hashes.json` from the last run. New and
    changed cards are upserted in batches (`--batch-size`, default 500), all in
-   one transaction. Price and other unstored changes cause no writes.
+   one transaction. Prices (`prices`, `purchase_uris`) are stored, so a price
+   change is an update; Scryfall refreshes most prices daily, so most rows
+   change every run. Changes to unstored fields (ranks and the like) cause
+   no writes.
    With no saved hashes (first run, lost cache) or `--full`, every card is
    upserted. Nothing is ever deleted; cards removed from Scryfall are logged.
    `state/` is only rewritten after the commit succeeds, never on `--dry-run`.

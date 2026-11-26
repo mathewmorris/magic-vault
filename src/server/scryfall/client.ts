@@ -66,6 +66,9 @@ export interface ScryfallCard {
   legalities?: Record<string, string> | null;
   finishes?: string[] | null;
   lang?: string | null;
+  /** Decimal strings keyed by currency and finish (usd, usd_foil, usd_etched, eur, ...). */
+  prices?: Record<string, string | null> | null;
+  purchase_uris?: Record<string, string> | null;
 }
 
 interface ScryfallList {
