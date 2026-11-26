@@ -17,6 +17,34 @@ model Card {
   card_faces      Json?   @db.JsonB
   all_parts       Json?   @db.JsonB
   layout          String
+
+  // Gameplay and printing fields from Scryfall's card object
+  // (https://scryfall.com/docs/api/cards). All nullable: older rows stay
+  // empty until the next bulk sync fills them in.
+  oracle_id        String?
+  mana_cost        String?
+  cmc              Float?
+  type_line        String?
+  oracle_text      String?
+  power            String?
+  toughness        String?
+  loyalty          String?
+  colors           Json?   @db.JsonB
+  color_identity   Json?   @db.JsonB
+  keywords         Json?   @db.JsonB
+  set              String?
+  set_name         String?
+  collector_number String?
+  rarity           String?
+  artist           String?
+  flavor_text      String?
+  released_at      String?
+  legalities       Json?   @db.JsonB
+  finishes         Json?   @db.JsonB
+  lang             String?
+
+  @@index([oracle_id])
+  @@index([set, collector_number])
 }
 
 model Collection {

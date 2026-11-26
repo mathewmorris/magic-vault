@@ -33,9 +33,39 @@ STORED_FIELDS = (
     "card_faces",
     "all_parts",
     "layout",
+    "oracle_id",
+    "mana_cost",
+    "cmc",
+    "type_line",
+    "oracle_text",
+    "power",
+    "toughness",
+    "loyalty",
+    "colors",
+    "color_identity",
+    "keywords",
+    "set",
+    "set_name",
+    "collector_number",
+    "rarity",
+    "artist",
+    "flavor_text",
+    "released_at",
+    "legalities",
+    "finishes",
+    "lang",
 )
 REQUIRED_FIELDS = ("name", "scryfall_uri", "image_status", "layout")
-JSON_FIELDS = ("image_uris", "card_faces", "all_parts")
+JSON_FIELDS = (
+    "image_uris",
+    "card_faces",
+    "all_parts",
+    "colors",
+    "color_identity",
+    "keywords",
+    "legalities",
+    "finishes",
+)
 
 # Report types whose entries carry the new value, and where to find it.
 _NEW_VALUE_KEYS = {

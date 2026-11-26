@@ -24,7 +24,7 @@ Update database & log changes made
 - without it, reads `DATABASE_URL` and needs `psycopg` or `psycopg2` installed
 - `--cards scryfall_downloads/default_cards_YYYY_MM_DD.json` lets nested changes
   (`image_uris`, `card_faces`, `all_parts`) be applied; without it those cards are skipped
-- only the columns the Card table stores are written, all in one transaction, in batches (`--batch-size`, default 500)
+- only the columns the Card table stores (`STORED_FIELDS` in `apply_diff.py`) are written, all in one transaction, in batches (`--batch-size`, default 500)
 - cards removed from Scryfall are logged and skipped, since Card has no soft-delete column
 
 Run the tests from this folder (stdlib only; the ijson test skips without it)

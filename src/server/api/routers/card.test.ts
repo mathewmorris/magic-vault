@@ -1,8 +1,9 @@
 import prismaMock from "singleton";
-import { Prisma, type Card } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import { createInnerTRPCContext } from "../trpc";
 import { appRouter } from "../root";
 import { isScryfallFallbackEnabled, scryfall } from "../../scryfall/client";
+import { buildCard, emptyCardRowFields } from "../../testing/cardFixture";
 
 jest.mock("../../scryfall/client", () => ({
   ...jest.requireActual<object>("../../scryfall/client"),
@@ -18,18 +19,6 @@ const searchByName = scryfall.searchByName as jest.MockedFunction<
 >;
 
 describe("card procedures", () => {
-  const buildCard = (overrides: Partial<Card> = {}): Card => ({
-    id: "card-1",
-    name: "Black Lotus",
-    scryfall_uri: "https://scryfall.com/card/black-lotus",
-    image_status: "highres_scan",
-    image_uris: null,
-    card_faces: null,
-    all_parts: null,
-    layout: "normal",
-    ...overrides,
-  });
-
   const callerWithoutSession = () => {
     const ctx = createInnerTRPCContext({ session: null });
     return appRouter.createCaller({ ...ctx, prisma: prismaMock });
@@ -182,6 +171,7 @@ describe("card procedures", () => {
             image_uris: { small: "https://cards.scryfall.io/small/new.jpg" },
             card_faces: Prisma.DbNull,
             all_parts: Prisma.DbNull,
+            ...emptyCardRowFields,
           },
         ],
         skipDuplicates: true,
