@@ -36,8 +36,8 @@ logger.info(f"{newFilename}: has {len(newData)} cards")
 logger.info(f"Starting to diff {oldFilename} and {newFilename}")
 # Diff data and keep list of updates
 events = DeepDiff(
-    newData,
     oldData,
+    newData,
     group_by='id',
     verbose_level=2
 )
