@@ -7,6 +7,7 @@ import { buildCard, emptyCardRowFields } from "../../testing/cardFixture";
 import { affiliateConfig } from "../../affiliate";
 import { buyLinks } from "~/utils/buyLinks";
 import { PRINTINGS_LIMIT } from "./card";
+import { type CardSearchRow } from "../../search/buildCardSearch";
 
 jest.mock("../../scryfall/client", () => ({
   ...jest.requireActual<object>("../../scryfall/client"),
@@ -370,6 +371,94 @@ describe("card procedures", () => {
       const result = await callerWithoutSession().card.search({ name: "brand new" });
 
       expect(result).toStrictEqual({ items: [], nextCursor: undefined });
+    });
+  });
+
+  describe("searchAdvanced", () => {
+    const row = (id: string, overrides: Partial<CardSearchRow> = {}): CardSearchRow => ({
+      id,
+      name: `Card ${id}`,
+      scryfall_uri: `https://scryfall.com/card/x/${id}`,
+      mana_cost: "{R}",
+      type_line: "Instant",
+      set: "lea",
+      set_name: "Limited Edition Alpha",
+      rarity: "common",
+      image_uris: { small: `https://cards.scryfall.io/small/${id}.jpg` },
+      card_faces: null,
+      ...overrides,
+    });
+
+    /** The SQL handed to $queryRaw on the given call. */
+    const sentSql = (call = 0) => prismaMock.$queryRaw.mock.calls[call]?.[0] as Prisma.Sql;
+
+    test("runs the parsed query and returns its rows", async () => {
+      const rows = [row("a"), row("b")];
+      prismaMock.$queryRaw.mockResolvedValue(rows);
+
+      const result = await callerWithoutSession().card.searchAdvanced({ q: "bolt c:r" });
+
+      expect(result).toStrictEqual({ items: rows, hasMore: false, warnings: [] });
+      expect(prismaMock.$queryRaw).toHaveBeenCalledTimes(1);
+      const sql = sentSql();
+      expect(sql.text).toContain('"name" ILIKE $1');
+      expect(sql.text).toContain('ORDER BY "name" ASC');
+      expect(sql.values).toStrictEqual(["%bolt%", '["R"]', 61, 0]);
+    });
+
+    test("says there's more when an extra row comes back, and drops it", async () => {
+      const rows = Array.from({ length: 61 }, (_, i) => row(`card-${i}`));
+      prismaMock.$queryRaw.mockResolvedValue(rows);
+
+      const result = await callerWithoutSession().card.searchAdvanced({ q: "goblin" });
+
+      expect(result.hasMore).toBe(true);
+      expect(result.items).toHaveLength(60);
+      expect(result.items[59]?.id).toBe("card-59");
+    });
+
+    test("passes sort and page through", async () => {
+      prismaMock.$queryRaw.mockResolvedValue([]);
+
+      await callerWithoutSession().card.searchAdvanced({ q: "t:goblin", sort: "mv", page: 3 });
+
+      const sql = sentSql();
+      expect(sql.text).toContain('ORDER BY "cmc" ASC NULLS LAST');
+      expect(sql.values).toStrictEqual(["%goblin%", 61, 120]);
+    });
+
+    test("returns warnings for keywords it doesn't know", async () => {
+      prismaMock.$queryRaw.mockResolvedValue([row("a")]);
+
+      const result = await callerWithoutSession().card.searchAdvanced({ q: "bolt pow>3" });
+
+      expect(result.warnings).toStrictEqual(['Unknown keyword "pow" was ignored.']);
+      expect(result.items).toHaveLength(1);
+    });
+
+    test.each(["", "   ", "pow>3"])("doesn't query when %j has nothing to search for", async (q) => {
+      const result = await callerWithoutSession().card.searchAdvanced({ q });
+
+      expect(result.items).toStrictEqual([]);
+      expect(result.hasMore).toBe(false);
+      expect(prismaMock.$queryRaw).not.toHaveBeenCalled();
+    });
+
+    test("rejects queries over 500 characters", async () => {
+      await expect(
+        callerWithoutSession().card.searchAdvanced({ q: "a".repeat(501) }),
+      ).rejects.toThrow();
+      expect(prismaMock.$queryRaw).not.toHaveBeenCalled();
+    });
+
+    test("rejects unknown sorts and bad pages", async () => {
+      const caller = callerWithoutSession();
+      await expect(
+        // @ts-expect-error not a sort
+        caller.card.searchAdvanced({ q: "bolt", sort: "price" }),
+      ).rejects.toThrow();
+      await expect(caller.card.searchAdvanced({ q: "bolt", page: 0 })).rejects.toThrow();
+      await expect(caller.card.searchAdvanced({ q: "bolt", page: 1.5 })).rejects.toThrow();
     });
   });
 });

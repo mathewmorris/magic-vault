@@ -6,6 +6,7 @@ import {
     publicProcedure,
 } from "~/server/api/trpc";
 import { affiliateConfig } from "~/server/affiliate";
+import { buildCardSearch, type CardSearchRow } from "~/server/search/buildCardSearch";
 import { cacheScryfallCards } from "~/server/scryfall/cacheCards";
 import {
     isScryfallFallbackEnabled,
@@ -30,6 +31,13 @@ export const printingSelect = {
     image_uris: true,
     card_faces: true,
 } as const;
+import { parseQuery } from "~/utils/search/parseQuery";
+import {
+    MAX_QUERY_LENGTH,
+    MAX_SEARCH_PAGE,
+    SEARCH_PAGE_SIZE,
+    SEARCH_SORTS,
+} from "~/utils/search/searchOptions";
 
 export const cardRouter = createTRPCRouter({
     byId: publicProcedure
@@ -139,6 +147,29 @@ export const cardRouter = createTRPCRouter({
             return {
                 items,
                 nextCursor,
+            };
+        }),
+    searchAdvanced: publicProcedure
+        .meta({ description: "Scryfall-style card search (c:, t:, o:, mv:, r:, s:, f: and more), one result per card." })
+        .input(
+            z.object({
+                q: z.string().max(MAX_QUERY_LENGTH).describe('The search, e.g. goblin c:r mv<=2'),
+                sort: z.enum(SEARCH_SORTS).default("name"),
+                page: z.number().int().min(1).max(MAX_SEARCH_PAGE).default(1),
+            }),
+        )
+        .query(async ({ ctx, input }): Promise<{ items: CardSearchRow[]; hasMore: boolean; warnings: string[] }> => {
+            const { terms, warnings } = parseQuery(input.q);
+            // Nothing to search for: don't list the whole table.
+            if (terms.length === 0) return { items: [], hasMore: false, warnings };
+
+            const rows = await ctx.prisma.$queryRaw<CardSearchRow[]>(
+                buildCardSearch(terms, { sort: input.sort, page: input.page, pageSize: SEARCH_PAGE_SIZE }),
+            );
+            return {
+                items: rows.slice(0, SEARCH_PAGE_SIZE),
+                hasMore: rows.length > SEARCH_PAGE_SIZE,
+                warnings,
             };
         }),
 });

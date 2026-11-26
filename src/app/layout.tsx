@@ -31,12 +31,14 @@ export default async function RootLayout({
   const navLinks: NavLink[] = session
     ? [
         { href: "/", label: "Home" },
+        { href: "/search", label: "Search" },
         { href: "/collections", label: "My Collections" },
         { href: "/scan", label: "Scan" },
         { href: "/about", label: "About" },
       ]
     : [
         { href: "/", label: "Home" },
+        { href: "/search", label: "Search" },
         { href: "/about", label: "About" },
       ];
 
