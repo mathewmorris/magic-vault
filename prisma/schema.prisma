@@ -89,6 +89,38 @@ model CardsOnCollections {
     @@id([collectionId, cardId, finish])
 }
 
+model Deck {
+    id            String    @id @default(cuid())
+    name          String
+    // A format key from Scryfall's legalities ("commander", "modern", ...).
+    format        String    @default("commander")
+    description   String?
+    createdAt     DateTime  @default(now())
+    updatedAt     DateTime  @updatedAt
+    user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+    userId        String
+    deletedAt     DateTime?
+    cardEntries   CardsOnDecks[]
+
+    @@index([userId])
+}
+
+// One row per card per board in a deck, with how many copies are on it.
+// Like CardsOnCollections, cardId is deliberately not a foreign key to Card
+// so reloading the Card table never fails or empties decks. board is one of
+// "main", "side" or "commander".
+model CardsOnDecks {
+    deck          Deck      @relation(fields: [deckId], references: [id], onDelete: Cascade)
+    deckId        String
+    cardId        String
+    count         Int       @default(1)
+    board         String    @default("main")
+    createdAt     DateTime  @default(now())
+    updatedAt     DateTime  @updatedAt
+
+    @@id([deckId, cardId, board])
+}
+
 // Necessary for Next auth
 model Account {
     id                String  @id @default(cuid())
@@ -126,6 +158,7 @@ model User {
     accounts      Account[]
     sessions      Session[]
     collections   Collection[]
+    decks         Deck[]
 }
 
 model VerificationToken {
