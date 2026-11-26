@@ -17,6 +17,8 @@
     "test:e2e": "playwright test",
     "vercel:env": "vercel env pull",
     "vercel:link": "vercel link",
+    "embed:cards": "ts-node --transpile-only --compiler-options '{\"module\":\"CommonJS\"}' scripts/embed-cards.ts",
+    "embed:calibrate": "ts-node --transpile-only --compiler-options '{\"module\":\"CommonJS\"}' scripts/calibrate-embedder.ts",
     "db:gen": "prisma generate",
     "db:seed": "prisma db seed",
     "db:migrate": "prisma migrate dev",

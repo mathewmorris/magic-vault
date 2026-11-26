@@ -19,5 +19,24 @@ const config: Config = {
   clearMocks: true,
 }
 
-export default createJestConfig(config)
+// PGlite (in-process Postgres for raw SQL tests) ships a CommonJS build that
+// still loads Node built-ins with dynamic import(). Run that one package
+// through a small transform that turns those into require().
+const PGLITE_CJS = '/node_modules/@electric-sql/pglite/dist/.*\\.cjs$'
+
+const jestConfig = async (): Promise<Config> => {
+  const resolved = await createJestConfig(config)()
+  return {
+    ...resolved,
+    transform: {
+      ...resolved.transform,
+      [PGLITE_CJS]: '<rootDir>/src/test/jest/dynamicImportToRequire.cjs',
+    },
+    transformIgnorePatterns: (resolved.transformIgnorePatterns ?? []).map((pattern) =>
+      pattern.replace('/node_modules/', '/node_modules/(?!@electric-sql/pglite/)'),
+    ),
+  }
+}
+
+export default jestConfig
 

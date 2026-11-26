@@ -2,6 +2,8 @@
 
 export function l2Normalize(vector: ArrayLike<number>): number[] {
   let sum = 0;
+  // ArrayLike (Float32Array, number[]) isn't iterable as a type, so index it.
+  // eslint-disable-next-line @typescript-eslint/prefer-for-of
   for (let i = 0; i < vector.length; i++) sum += vector[i]! * vector[i]!;
   const norm = Math.sqrt(sum);
   if (!Number.isFinite(norm) || norm === 0) throw new Error("Cannot normalize a zero vector");
@@ -41,6 +43,7 @@ export function cosineSimilarity(a: ArrayLike<number>, b: ArrayLike<number>): nu
 /** pgvector text format, e.g. "[0.1,0.2]". Rejects NaN/Infinity. */
 export function toVectorLiteral(vector: ArrayLike<number>): string {
   const parts: string[] = [];
+  // eslint-disable-next-line @typescript-eslint/prefer-for-of
   for (let i = 0; i < vector.length; i++) {
     const value = vector[i]!;
     if (!Number.isFinite(value)) throw new Error("Embedding has a non-finite value");

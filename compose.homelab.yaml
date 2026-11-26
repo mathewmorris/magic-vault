@@ -25,7 +25,9 @@ services:
         condition: service_started
 
   db: # Postgres for Magic Vault only. Moves to the shared instance once it exists.
-    image: postgres:16-alpine
+    # Postgres 16 with pgvector, for card image embeddings (AI scan). Same
+    # major version as before, so the existing data volume keeps working.
+    image: pgvector/pgvector:pg16
     container_name: magic-vault-db
     restart: unless-stopped
     env_file: .env.homelab # reads POSTGRES_PASSWORD
