@@ -1,0 +1,197 @@
+"use client";
+
+/**
+ * The AI scanner's engine: loads the card detector, the image embedder and
+ * the OCR worker on first use, and turns a burst of camera frames into a
+ * ranked list of printings.
+ *
+ * Loading downloads the models (about 12 MB, cached by the browser after the
+ * first time), so it only starts when `load()` is called. The detector and
+ * embedder are required; OCR is a bonus, so if Tesseract fails to start the
+ * scanner carries on with the image match alone.
+ */
+
+import { useCallback, useEffect, useRef, useState } from "react";
+import { api } from "~/utils/api";
+import type { ScanMatchResult } from "~/server/api/routers/scan";
+import { rankRecognition, type RecognitionResult } from "../fuse";
+import { EMBED_MODEL, POSE_MODEL } from "../model";
+import { createCardOcr, type CardOcr, type CardOcrResult } from "../ocr";
+import type { RgbaImage } from "../preprocess";
+import { createCardDetector, type CardDetector, type Detection } from "./detector";
+import { createEmbedder, embedBurst, type Embedder } from "./embedder";
+import { captureCard, type CardCapture } from "./pipeline";
+
+export type LoadState =
+  | { status: "idle" }
+  | { status: "loading"; progress: number }
+  | { status: "ready"; ocr: boolean; detectorKinds: ("pose" | "opencv")[] }
+  | { status: "failed"; error: string };
+
+export type RecognitionOutcome = {
+  capture: CardCapture | null;
+  ocr: CardOcrResult | null;
+  server: ScanMatchResult | null;
+  result: RecognitionResult | null;
+};
+
+type Engine = { detector: CardDetector; embedder: Embedder; ocr: CardOcr | null };
+
+/** How many image matches to ask the server for. */
+export const MATCH_LIMIT = 20;
+
+export function useCardRecognizer() {
+  const utils = api.useUtils();
+  const [state, setState] = useState<LoadState>({ status: "idle" });
+  const engineRef = useRef<Engine | null>(null);
+  const loadingRef = useRef<Promise<boolean> | null>(null);
+  // Bumped on unmount (and on React's dev-mode remount), so a load that
+  // finishes after it can tell its result is no longer wanted.
+  const generationRef = useRef(0);
+
+  const load = useCallback((): Promise<boolean> => {
+    if (engineRef.current) return Promise.resolve(true);
+    if (loadingRef.current) return loadingRef.current;
+    const generation = generationRef.current;
+    const stale = () => generationRef.current !== generation;
+
+    // Three parts; OCR reports its own download progress.
+    const parts = { detector: 0, embedder: 0, ocr: 0 };
+    const report = () => {
+      if (stale()) return;
+      setState({ status: "loading", progress: (parts.detector + parts.embedder + parts.ocr) / 3 });
+    };
+    report();
+
+    const promise = (async () => {
+      const detectorPromise = createCardDetector({ pose: POSE_MODEL, useOpenCv: true }).then((d) => {
+        parts.detector = 1;
+        report();
+        return d;
+      });
+      const embedderPromise = createEmbedder(EMBED_MODEL).then((e) => {
+        parts.embedder = 1;
+        report();
+        return e;
+      });
+      const ocrPromise = createCardOcr((progress) => {
+        parts.ocr = progress;
+        report();
+      }).catch((error: unknown) => {
+        console.error("OCR failed to start; scanning by image only", error);
+        parts.ocr = 1;
+        report();
+        return null;
+      });
+
+      const [detector, embedder, ocr] = await Promise.allSettled([
+        detectorPromise,
+        embedderPromise,
+        ocrPromise,
+      ]);
+      if (detector.status === "rejected" || embedder.status === "rejected") {
+        if (detector.status === "fulfilled") detector.value.dispose();
+        if (embedder.status === "fulfilled") embedder.value.dispose();
+        if (ocr.status === "fulfilled") void ocr.value?.terminate();
+        const reason: unknown =
+          detector.status === "rejected"
+            ? detector.reason
+            : (embedder as PromiseRejectedResult).reason;
+        throw reason instanceof Error ? reason : new Error("The card scanner didn't load.");
+      }
+      const engine: Engine = {
+        detector: detector.value,
+        embedder: embedder.value,
+        ocr: ocr.status === "fulfilled" ? ocr.value : null,
+      };
+      if (stale()) {
+        engine.detector.dispose();
+        engine.embedder.dispose();
+        void engine.ocr?.terminate();
+        return false;
+      }
+      engineRef.current = engine;
+      setState({ status: "ready", ocr: engine.ocr !== null, detectorKinds: [...engine.detector.kinds] });
+      return true;
+    })().catch((error: unknown) => {
+      console.error("Card scanner failed to load", error);
+      if (stale()) return false;
+      loadingRef.current = null;
+      setState({
+        status: "failed",
+        error: error instanceof Error ? error.message : "The card scanner didn't load.",
+      });
+      return false;
+    });
+
+    loadingRef.current = promise;
+    return promise;
+  }, []);
+
+  useEffect(() => {
+    const generation = generationRef;
+    return () => {
+      generation.current++;
+      const engine = engineRef.current;
+      engineRef.current = null;
+      loadingRef.current = null;
+      engine?.detector.dispose();
+      engine?.embedder.dispose();
+      void engine?.ocr?.terminate().catch(() => undefined);
+    };
+  }, []);
+
+  /** Find the card in one live frame, or null (also null until loaded). */
+  const detect = useCallback(async (frame: RgbaImage): Promise<Detection | null> => {
+    const engine = engineRef.current;
+    if (!engine) return null;
+    return engine.detector.detect(frame);
+  }, []);
+
+  /** Burst of frames -> flat card -> embedding + OCR -> server match -> ranking. */
+  const recognize = useCallback(
+    async (frames: RgbaImage[], options: { allowGuideFallback: boolean }): Promise<RecognitionOutcome> => {
+      const engine = engineRef.current;
+      if (!engine) throw new Error("The card scanner isn't loaded yet");
+
+      const capture = await captureCard(frames, engine.detector, {
+        allowGuideFallback: options.allowGuideFallback,
+      });
+      if (!capture) return { capture: null, ocr: null, server: null, result: null };
+
+      const [embedding, ocr] = await Promise.all([
+        embedBurst(engine.embedder, capture.cards),
+        engine.ocr
+          ? engine.ocr.read(capture.best).catch((error: unknown) => {
+              console.error("OCR failed for this card", error);
+              return null;
+            })
+          : Promise.resolve(null),
+      ]);
+
+      const collector = ocr?.collector ?? null;
+      const server = await utils.scan.match.fetch({
+        embedding,
+        modelId: EMBED_MODEL.id,
+        limit: MATCH_LIMIT,
+        printing:
+          collector?.setCode && collector?.collectorNumber
+            ? { set: collector.setCode, collectorNumber: collector.collectorNumber }
+            : undefined,
+      });
+
+      const result = rankRecognition({
+        matches: server.matches,
+        printing: server.printing,
+        ocrName: ocr?.name ?? null,
+        collector,
+      });
+      return { capture, ocr, server, result };
+    },
+    [utils],
+  );
+
+  return { state, load, detect, recognize };
+}
+
+export type CardRecognizer = ReturnType<typeof useCardRecognizer>;

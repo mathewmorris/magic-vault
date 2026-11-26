@@ -1,11 +1,14 @@
 generator client {
     provider = "prisma-client-js"
-    previewFeatures = ["driverAdapters"]
+    previewFeatures = ["driverAdapters", "postgresqlExtensions"]
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  // pgvector, for card image embeddings (AI card recognition). Neon has it
+  // built in; local and homelab Postgres use the pgvector/pgvector image.
+  extensions = [vector]
 }
 
 model Card {
@@ -47,6 +50,7 @@ model Card {
   // decimal strings or null) and purchase_uris. Refreshed by the daily sync.
   prices           Json?   @db.JsonB
   purchase_uris    Json?   @db.JsonB
+  embeddings       CardEmbedding[]
 
   @@index([oracle_id])
   @@index([set, collector_number])
@@ -54,6 +58,26 @@ model Card {
   // extension is created in the migration that adds them.
   @@index([name(ops: raw("gin_trgm_ops"))], type: Gin)
   @@index([oracle_text(ops: raw("gin_trgm_ops"))], type: Gin)
+}
+
+// Image embedding of one card face, for AI card recognition. Built by
+// scripts/embed-cards.ts from Scryfall's "normal" image. modelId is
+// EMBED_MODEL.id (src/utils/recognition/model.ts): a new model or new
+// preprocessing gets a new id, so old and new vectors are never compared.
+// Unlike CardsOnCollections this IS a foreign key: an embedding of a card
+// that's gone is useless, so it goes with the card.
+model CardEmbedding {
+  card      Card     @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  cardId    String
+  // Index into card_faces for cards whose faces have their own images
+  // (transform, modal_dfc, ...); 0 for everything else.
+  face      Int      @default(0)
+  modelId   String
+  embedding Unsupported("halfvec(256)")
+  createdAt DateTime @default(now())
+
+  @@id([cardId, face, modelId])
+  @@index([modelId])
 }
 
 model Collection {

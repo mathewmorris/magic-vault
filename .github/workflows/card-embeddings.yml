@@ -1,0 +1,84 @@
+name: Card image embeddings
+# Builds the AI scan index (CardEmbedding) for cards that don't have an
+# embedding for the current model yet. Runs an hour after the Scryfall sync
+# so new cards get picked up the same day. See docs/card-recognition.md.
+#
+# Off until the repo variable AI_SCAN_INDEX_ENABLED is set to "true"
+# (Settings > Secrets and variables > Actions > Variables).
+on:
+  schedule:
+    # 10:17 UTC daily, an hour after scryfall-sync.yml (09:17).
+    - cron: "17 10 * * *"
+  workflow_dispatch:
+    inputs:
+      limit:
+        description: "Most cards to embed this run"
+        type: number
+        default: 20000
+      calibrate:
+        description: "Run the calibration report instead of indexing (writes nothing)"
+        type: boolean
+        default: false
+      dry_run:
+        description: "Dry run: count what needs embedding, write nothing"
+        type: boolean
+        default: false
+
+concurrency:
+  group: card-embeddings
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  embed:
+    name: Embed card images
+    if: vars.AI_SCAN_INDEX_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 300
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      SKIP_ENV_VALIDATION: "true"
+      # Empty on scheduled runs, so those use the defaults below.
+      LIMIT: ${{ inputs.limit }}
+      CALIBRATE: ${{ inputs.calibrate }}
+      DRY_RUN: ${{ inputs.dry_run }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      # The model id names the file, so a new EMBED_MODEL.id gets a new cache.
+      - name: Read model id
+        id: model
+        run: |
+          id=$(node -e "require('ts-node').register({transpileOnly:true,compilerOptions:{module:'CommonJS'}}); console.log(require('./src/utils/recognition/model').EMBED_MODEL.id)")
+          echo "id=$id" >> "$GITHUB_OUTPUT"
+
+      - name: Cache model
+        uses: actions/cache@v4
+        with:
+          path: .cache/models
+          key: card-embed-model-${{ steps.model.outputs.id }}
+
+      - name: Calibrate
+        if: env.CALIBRATE == 'true'
+        run: npm run embed:calibrate
+
+      - name: Embed cards
+        if: env.CALIBRATE != 'true'
+        run: |
+          args=(--limit "${LIMIT:-20000}")
+          if [ "$DRY_RUN" = "true" ]; then args+=(--dry-run); fi
+          npm run embed:cards -- "${args[@]}"

@@ -36,6 +36,16 @@ docker compose -f compose.homelab.yaml up -d --no-build
 The app runs `prisma migrate deploy` every time it starts, so the database
 schema is created on the first start.
 
+The database runs `pgvector/pgvector:pg16` (Postgres 16 with pgvector, for AI
+scan). It used to be `postgres:16-alpine`. Same major version, so the volume
+carries over, but Alpine and Debian sort text differently, so after the switch
+rebuild the indexes once:
+
+```bash
+docker compose -f compose.homelab.yaml exec db psql -U magic_vault -d magic_vault \
+  -c 'REINDEX DATABASE magic_vault' -c 'ALTER DATABASE magic_vault REFRESH COLLATION VERSION'
+```
+
 ### Caddy (bananajuice)
 
 Add to `/etc/caddy/Caddyfile`, then `sudo systemctl reload caddy`:

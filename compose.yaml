@@ -38,7 +38,8 @@ services:
 
   db:
     container_name: magicvault-db
-    image: postgres
+    # Postgres 16 with pgvector, for card image embeddings (AI scan).
+    image: pgvector/pgvector:pg16
     restart: always
     user: postgres
     secrets:

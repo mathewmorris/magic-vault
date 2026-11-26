@@ -17,32 +17,39 @@
  *
  * There's no card detection: if the card isn't inside the guide, the crop
  * misses the title. The pure parts live in ~/utils/scan and are unit tested.
+ *
+ * With the aiScan feature flag on, the page uses the AI scanner instead
+ * (~/components/scan/AiScanner: card detection, image embeddings and OCR of
+ * the name and collector number), and falls back to this flow if that can't
+ * run. Both share the collection picker, adding, undo and the session tally
+ * (~/utils/scan/useScanCollection).
  */
 
-import { useSession } from "next-auth/react";
-import Link from "next/link";
+import dynamic from "next/dynamic";
 import { useSearchParams } from "next/navigation";
-import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import type { Worker as TesseractWorker } from "tesseract.js";
 import Button from "~/components/Button";
 import CameraFeed from "~/components/CameraFeed";
-import CollectionPicker, { collectionLabel } from "~/components/scan/CollectionPicker";
+import ScanCollectionControls from "~/components/scan/ScanCollectionControls";
 import ScanMatches, { type MatchOption } from "~/components/scan/ScanMatches";
-import SessionTally from "~/components/scan/SessionTally";
 import { api, type RouterOutputs } from "~/utils/api";
-import { signInHref } from "~/utils/signInHref";
 import { smallImageUrl } from "~/utils/cardImage";
+import { isFeatureEnabled } from "~/utils/featureFlags";
 import { classifyCameraError, type CameraErrorInfo } from "~/utils/scan/cameraError";
 import { cardGuideRect, titleStripRect, type Rect } from "~/utils/scan/cardGuide";
 import { extractCardName } from "~/utils/scan/cleanOcrText";
 import { rankCandidates, type RankedMatch } from "~/utils/scan/fuzzyMatch";
-import {
-  pickInitialCollection,
-  readLastCollectionId,
-  saveLastCollectionId,
-} from "~/utils/scan/lastCollection";
-import { type AddedCard } from "~/utils/scan/scanSession";
 import { buildSearchTerms } from "~/utils/scan/searchTerms";
+import { useScanCollection, type ScanCollection } from "~/utils/scan/useScanCollection";
+
+// The AI scanner pulls in the detector and embedder code, so it's only
+// downloaded when the aiScan flag turns it on, and never rendered on the
+// server (it needs the camera and canvas).
+const AiScanner = dynamic(() => import("~/components/scan/AiScanner"), {
+  ssr: false,
+  loading: () => <p className="text-sm text-gray-400">Loading the card scanner...</p>,
+});
 
 type Card = RouterOutputs["card"]["search"]["items"][number];
 
@@ -136,12 +143,53 @@ export default function ScanPage() {
 }
 
 function Scanner() {
-  const utils = api.useUtils();
   const searchParams = useSearchParams();
   const requestedCollection = searchParams?.get("collection") ?? null;
-  const { status } = useSession();
-  const auth =
-    status === "authenticated" ? "signed-in" : status === "unauthenticated" ? "signed-out" : "loading";
+  const scan = useScanCollection(requestedCollection);
+
+  // With the aiScan flag on, start with the AI scanner; it hands back to the
+  // title-OCR scanner (with a notice) if it can't run here.
+  const [mode, setMode] = useState<"ai" | "title">(() =>
+    isFeatureEnabled("aiScan") ? "ai" : "title",
+  );
+  const [notice, setNotice] = useState<string | null>(null);
+  const fallBack = useCallback((message: string) => {
+    setNotice(message);
+    setMode("title");
+  }, []);
+
+  return (
+    <div className="flex flex-col gap-6 px-4">
+      <div>
+        <h1 className="text-2xl font-semibold">Scan cards</h1>
+        <p className="text-sm text-gray-400">
+          {mode === "ai"
+            ? "Hold a card up to the camera. It captures by itself once the outline locks on, or press Capture."
+            : "Fit the card inside the outline with its name in the pink box, then capture."}
+        </p>
+      </div>
+
+      <ScanCollectionControls scan={scan} />
+
+      {notice && (
+        <p role="status" className="text-sm text-yellow-300">
+          {notice}
+        </p>
+      )}
+
+      {mode === "ai" ? (
+        <AiScanner scan={scan} onUnavailable={fallBack} />
+      ) : (
+        <TitleOcrScanner scan={scan} />
+      )}
+    </div>
+  );
+}
+
+/** The original scanner: OCR the title strip inside a fixed guide and search by name. */
+function TitleOcrScanner({ scan }: { scan: ScanCollection }) {
+  const utils = api.useUtils();
+  const { clearAdded } = scan;
 
   const [cameraKey, setCameraKey] = useState(0);
   const [cameraError, setCameraError] = useState<CameraErrorInfo | null>(null);
@@ -155,43 +203,6 @@ function Scanner() {
   const [matches, setMatches] = useState<RankedMatch<Card>[]>([]);
   const [errorMessage, setErrorMessage] = useState("");
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
-
-  // Adding to a collection.
-  const collectionsQuery = api.collection.getAll.useQuery(undefined, {
-    enabled: auth === "signed-in",
-  });
-  const collections = useMemo(() => collectionsQuery.data ?? [], [collectionsQuery.data]);
-  const [collectionId, setCollectionId] = useState<string | null>(null);
-  const [added, setAdded] = useState<AddedCard[]>([]);
-  const [addedName, setAddedName] = useState<string | null>(null);
-  const addCard = api.collection.addCard.useMutation();
-  const removeCard = api.collection.removeCard.useMutation();
-  // React Query keeps reset stable across renders, unlike the mutation object.
-  const resetAddCard = addCard.reset;
-  const signInUrl = signInHref(
-    requestedCollection ? `/scan?collection=${encodeURIComponent(requestedCollection)}` : "/scan",
-  );
-
-  // Once the collections load, start with the one from the URL, then the last
-  // one used, then the first. Also covers the current one going away.
-  useEffect(() => {
-    if (!collectionsQuery.data) return;
-    if (collectionId && collections.some((collection) => collection.id === collectionId)) return;
-    setCollectionId(
-      pickInitialCollection(collections, {
-        requested: requestedCollection,
-        remembered: readLastCollectionId(),
-      }),
-    );
-  }, [collectionsQuery.data, collections, collectionId, requestedCollection]);
-
-  const collection = collections.find((entry) => entry.id === collectionId) ?? null;
-  const collectionName = collection ? collectionLabel(collection.name) : null;
-
-  const chooseCollection = (id: string) => {
-    setCollectionId(id);
-    saveLastCollectionId(id);
-  };
 
   // One Tesseract worker for the life of the page. Creating it downloads the
   // English language data the first time, so we do it lazily on first capture.
@@ -251,8 +262,7 @@ function Scanner() {
       setProgress(0);
       setMatches([]);
       setSelectedCardId(null);
-      setAddedName(null);
-      resetAddCard();
+      clearAdded();
       setRawText("");
       setCardName("");
       setErrorMessage("");
@@ -283,7 +293,7 @@ function Scanner() {
         setPhase("error");
       }
     },
-    [getWorker, findMatches, resetAddCard],
+    [getWorker, findMatches, clearAdded],
   );
 
   const matchOptions: MatchOption[] = matches.map(({ candidate, name, score }) => ({
@@ -295,35 +305,7 @@ function Scanner() {
 
   const handleAdd = () => {
     const match = matchOptions.find((option) => option.id === selectedCardId);
-    if (!match || !collection) return;
-    const target = { collectionId: collection.id, collectionName: collectionName ?? "" };
-
-    addCard.mutate(
-      { collectionId: target.collectionId, cardId: match.id },
-      {
-        onSuccess: () => {
-          setAdded((list) => [...list, { cardId: match.id, name: match.name, ...target }]);
-          setAddedName(match.name);
-          saveLastCollectionId(target.collectionId);
-          void utils.collection.cards.invalidate({ collectionId: target.collectionId });
-        },
-      },
-    );
-  };
-
-  const handleUndo = () => {
-    const last = added[added.length - 1];
-    if (!last) return;
-    removeCard.mutate(
-      { collectionId: last.collectionId, cardId: last.cardId },
-      {
-        onSuccess: () => {
-          setAdded((list) => list.slice(0, -1));
-          setAddedName(null);
-          void utils.collection.cards.invalidate({ collectionId: last.collectionId });
-        },
-      },
-    );
+    if (match) scan.add(match);
   };
 
   // Clear the last result; the camera stays on, ready for the next card.
@@ -331,11 +313,10 @@ function Scanner() {
     setPhase("ready");
     setMatches([]);
     setSelectedCardId(null);
-    setAddedName(null);
     setRawText("");
     setCardName("");
     setCropPreview(null);
-    addCard.reset();
+    clearAdded();
   };
 
   const handleCameraError = useCallback((error: unknown) => {
@@ -352,49 +333,7 @@ function Scanner() {
   const busy = phase === "reading" || phase === "searching";
 
   return (
-    <div className="flex flex-col gap-6 px-4">
-      <div>
-        <h1 className="text-2xl font-semibold">Scan cards</h1>
-        <p className="text-sm text-gray-400">
-          Fit the card inside the outline with its name in the pink box, then capture.
-        </p>
-      </div>
-
-      {auth === "signed-out" && (
-        <p className="text-sm">
-          <Link href={signInUrl} className="font-semibold underline">
-            Sign in
-          </Link>{" "}
-          to add the cards you scan to a collection.
-        </p>
-      )}
-
-      {auth === "signed-in" &&
-        (collectionsQuery.isError ? (
-          <p className="text-sm text-red-400">
-            Couldn&apos;t load your collections.{" "}
-            <button type="button" className="underline" onClick={() => void collectionsQuery.refetch()}>
-              Try again
-            </button>
-          </p>
-        ) : collectionsQuery.data ? (
-          <CollectionPicker
-            collections={collections}
-            value={collectionId}
-            onChange={chooseCollection}
-            disabled={addCard.isLoading}
-          />
-        ) : (
-          <p className="text-sm text-gray-400">Loading your collections...</p>
-        ))}
-
-      <SessionTally added={added} onUndo={handleUndo} undoing={removeCard.isLoading} />
-      {removeCard.error && (
-        <p role="alert" className="text-red-400">
-          Couldn&apos;t undo: {removeCard.error.message}
-        </p>
-      )}
-
+    <>
       {cameraError ? (
         <div className="flex flex-col items-start gap-3 rounded-lg border border-red-500 p-4">
           <p className="text-red-400">{cameraError.message}</p>
@@ -439,17 +378,16 @@ function Scanner() {
           selectedId={selectedCardId}
           onSelect={(id) => {
             setSelectedCardId(id);
-            setAddedName(null);
-            addCard.reset();
+            clearAdded();
           }}
-          auth={auth}
-          signInUrl={signInUrl}
-          collectionName={collectionName}
+          auth={scan.auth}
+          signInUrl={scan.signInUrl}
+          collectionName={scan.collectionName}
           onAdd={handleAdd}
-          adding={addCard.isLoading}
-          addedName={addedName}
+          adding={scan.adding}
+          addedName={scan.addedName}
           onScanNext={scanNext}
-          error={addCard.error?.message ?? null}
+          error={scan.addError}
         />
       )}
 
@@ -471,6 +409,6 @@ function Scanner() {
           </div>
         </details>
       )}
-    </div>
+    </>
   );
 }
