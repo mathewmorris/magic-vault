@@ -8,11 +8,21 @@ import Landing from "./Landing";
 const bolt = { id: "bolt", name: "Lightning Bolt", imageUrl: "https://cards.scryfall.io/normal/bolt.jpg" };
 
 describe("Landing", () => {
-  test("links sign-in back to the home page", () => {
+  test("names the app in the hero card and says it's a collection tracker", () => {
     render(<Landing featuredCards={[]} cardCount={null} />);
 
-    const link = screen.getByRole("link", { name: "Start your vault" });
-    expect(link.getAttribute("href")).toBe("/api/auth/signin?callbackUrl=%2F");
+    expect(screen.getByRole("heading", { level: 1, name: "Magic Vault" })).toBeTruthy();
+    expect(screen.getByText(/Legendary Artifact . Collection Tracker/)).toBeTruthy();
+    expect(screen.getByRole("img", { name: "Costs 0. It's free." })).toBeTruthy();
+  });
+
+  test("links both sign-in buttons back to the home page", () => {
+    render(<Landing featuredCards={[]} cardCount={null} />);
+
+    const signIn = "/api/auth/signin?callbackUrl=%2F";
+    expect(screen.getByRole("link", { name: "Start your vault" }).getAttribute("href")).toBe(signIn);
+    expect(screen.getByRole("link", { name: /^Keep/ }).getAttribute("href")).toBe(signIn);
+    expect(screen.getByRole("link", { name: /^Mulligan/ }).getAttribute("href")).toBe("/search");
   });
 
   test("has a search form that goes to /search", () => {
@@ -23,11 +33,14 @@ describe("Landing", () => {
     expect(box.closest("form")?.getAttribute("action")).toBe("/search");
   });
 
-  test("sends signed-in features through sign-in, and search straight to search", () => {
+  test("deals every feature as a card, sending signed-in ones through sign-in", () => {
     render(<Landing featuredCards={[]} cardCount={null} />);
 
-    expect(screen.getByRole("link", { name: /Search every card/ }).getAttribute("href")).toBe("/search");
-    expect(screen.getByRole("link", { name: /Build decks/ }).getAttribute("href")).toBe(
+    expect(screen.getAllByRole("heading", { level: 3 }).map((h) => h.textContent)).toEqual(
+      expect.arrayContaining(["Search Every Card", "Build Decks", "Scan With Your Camera"]),
+    );
+    expect(screen.getByRole("link", { name: /Search Every Card/ }).getAttribute("href")).toBe("/search");
+    expect(screen.getByRole("link", { name: /Build Decks/ }).getAttribute("href")).toBe(
       "/api/auth/signin?callbackUrl=%2Fdecks",
     );
   });
@@ -44,12 +57,27 @@ describe("Landing", () => {
     expect(screen.queryByText(/cards to search/)).toBeNull();
 
     rerender(<Landing featuredCards={[]} cardCount={120276} />);
-    expect(screen.getByText("120,276 cards to search, updated every day.")).toBeTruthy();
+    expect(screen.getByText("120,276 cards to search, prices updated daily.")).toBeTruthy();
   });
 
-  test("shows the Fan Content Policy notice", () => {
+  test("answers the usual questions as rulings", () => {
     render(<Landing featuredCards={[]} cardCount={null} />);
 
+    expect(screen.getByRole("heading", { name: "Call a judge" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Is it actually free?" })).toBeTruthy();
+  });
+
+  test("doesn't mention flagged-off features", () => {
+    render(<Landing featuredCards={[]} cardCount={null} />);
+
+    expect(screen.queryByText(/\bAI\b/)).toBeNull();
+    expect(screen.queryByText(/affiliate/i)).toBeNull();
+  });
+
+  test("shows the Scryfall credit and the Fan Content Policy notice", () => {
+    render(<Landing featuredCards={[]} cardCount={null} />);
+
+    expect(screen.getByRole("link", { name: "Scryfall" }).getAttribute("href")).toBe("https://scryfall.com");
     expect(screen.getByText(/unofficial Fan Content/i)).toBeTruthy();
   });
 });

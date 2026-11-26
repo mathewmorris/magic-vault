@@ -3,11 +3,12 @@ import Image from "next/image";
 import Link from "next/link";
 
 import FanContentNotice from "~/components/FanContentNotice";
-import FeatureIcon from "~/components/home/FeatureIcon";
+import { artWindow, cardBar, cardFrame, cardInner, flavorText, Gem, SetSymbol, textBox } from "~/components/home/cardParts";
 import { FEATURES } from "~/components/home/features";
 import { mutedText, panel, primaryAction, secondaryAction } from "~/components/home/styles";
 import SupportLink from "~/components/SupportLink";
 import { env } from "~/env";
+import { DECK_FORMATS, FORMAT_LABELS } from "~/utils/deck/checkDeck";
 
 export const metadata: Metadata = {
   title: "About | Magic Vault",
@@ -18,76 +19,119 @@ export const metadata: Metadata = {
 const PROJECT_BOARD_URL = "https://github.com/users/mathewmorris/projects/2?pane=info";
 const ISSUES_URL = "https://github.com/mathewmorris/magic-vault/issues";
 
-const AUDIENCE = [
-  {
-    title: "Collectors",
-    body: "You've got binders and boxes and a rough idea what's in them. Now you can know exactly, and see what it's all worth.",
-  },
-  {
-    title: "Deck builders",
-    body: "You want to brew from what you already own, and only buy the few cards you're missing.",
-  },
-  {
-    title: "Spreadsheet escapees",
-    body: "You've been tracking cards in a sheet. Import it and let the app keep the prices and printings straight.",
-  },
-];
+const linkClass = "font-semibold text-pink-600 underline dark:text-pink-400";
+
+/** The page's "card image": Magic Vault itself, drawn as a card. */
+function VaultCard() {
+  return (
+    <div className={`mx-auto w-full max-w-xs ${cardFrame}`}>
+      <div className={cardInner}>
+        <div className={cardBar}>
+          <span className="font-bold">Magic Vault</span>
+          <Gem tone="plain">0</Gem>
+        </div>
+        <div className={`flex aspect-[4/3] items-center justify-center ${artWindow}`}>
+          <div
+            aria-hidden="true"
+            className="absolute inset-0 bg-[radial-gradient(circle_at_50%_60%,rgba(250,10,169,0.35),transparent_60%)]"
+          />
+          <Image
+            src="/magicvault-logo.png"
+            alt=""
+            width={128}
+            height={128}
+            className="relative h-28 w-28 [image-rendering:pixelated]"
+          />
+        </div>
+        <div className={cardBar}>
+          <span className="text-xs font-semibold">Legendary Artifact &mdash; Collection Tracker</span>
+          <SetSymbol />
+        </div>
+        <div className={`text-sm ${textBox}`}>
+          <p className={flavorText}>
+            It doesn&apos;t judge your bulk. It just counts it.
+          </p>
+        </div>
+        <p className="px-1 text-[0.65rem] text-gray-400">MV &middot; 001 &middot; EN &middot; Illus. 8-bit purple circle</p>
+      </div>
+    </div>
+  );
+}
 
 export default function About() {
   return (
-    <div className="mx-auto max-w-4xl space-y-16">
-      <header className="flex flex-col items-start gap-6 sm:flex-row sm:items-center">
-        <Image
-          src="/magicvault-logo.png"
-          alt=""
-          width={96}
-          height={96}
-          className="rounded-2xl shadow-lg shadow-purple-900/30"
-        />
-        <div className="space-y-3">
-          <p className="text-sm font-semibold uppercase tracking-widest text-pink-600 dark:text-pink-400">
-            About
-          </p>
-          <h1 className="text-4xl font-bold sm:text-5xl">Your cards, sorted.</h1>
-          <p className={`text-lg ${mutedText}`}>
-            Magic Vault is a free web app for keeping track of your Magic: The Gathering cards. Look
-            up any card, log what you own, see what it&apos;s worth, and build decks from your own
-            collection.
-          </p>
+    <div className="mx-auto max-w-5xl space-y-16">
+      <header className="grid items-start gap-10 lg:grid-cols-[20rem_1fr]">
+        <VaultCard />
+        <div className="space-y-6">
+          <div className="space-y-2">
+            <h1 className="text-4xl font-bold sm:text-5xl">About Magic Vault</h1>
+            <p className={`text-lg ${mutedText}`}>
+              A free web app for the cards you own. Look up any card, log what&apos;s in your
+              binders and boxes, see what it&apos;s all worth, and build decks out of it.
+            </p>
+          </div>
+
+          <section aria-labelledby="oracle-heading" className={`space-y-4 ${panel}`}>
+            <h2 id="oracle-heading" className="text-sm font-semibold uppercase tracking-widest text-pink-600 dark:text-pink-400">
+              Oracle text
+            </h2>
+            <ul className="space-y-3">
+              {FEATURES.map((feature) => (
+                <li key={feature.id} className="leading-relaxed">
+                  <span className="font-bold">{feature.title}.</span>{" "}
+                  <span className={mutedText}>{feature.body}</span>
+                </li>
+              ))}
+            </ul>
+          </section>
+
+          <section aria-labelledby="legal-heading" className="space-y-3">
+            <h2 id="legal-heading" className="text-sm font-semibold uppercase tracking-widest text-pink-600 dark:text-pink-400">
+              Legalities
+            </h2>
+            <p className={`text-sm ${mutedText}`}>
+              Formats the deck checker knows the rules for. The kitchen table is always legal.
+            </p>
+            <ul className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-3">
+              {DECK_FORMATS.map((format) => (
+                <li
+                  key={format}
+                  className="flex items-center justify-between gap-2 rounded-lg border border-purple-100 px-3 py-1.5 dark:border-purple-900/70"
+                >
+                  <span>{FORMAT_LABELS[format]}</span>
+                  <span className="rounded bg-pink-600 px-1.5 py-0.5 text-xs font-semibold text-white">Legal</span>
+                </li>
+              ))}
+            </ul>
+          </section>
         </div>
       </header>
 
-      <section aria-labelledby="audience-heading" className="space-y-6">
-        <h2 id="audience-heading" className="text-2xl font-bold">
-          Who it&apos;s for
+      <section aria-labelledby="story-heading" className="mx-auto max-w-3xl space-y-4">
+        <p className="text-sm font-semibold uppercase tracking-widest text-pink-600 dark:text-pink-400">
+          Story spotlight
+        </p>
+        <h2 id="story-heading" className="text-3xl font-bold sm:text-4xl">
+          The Pile
         </h2>
-        <ul className="grid gap-4 md:grid-cols-3">
-          {AUDIENCE.map((item) => (
-            <li key={item.title} className={panel}>
-              <h3 className="font-semibold">{item.title}</h3>
-              <p className={`mt-2 text-sm ${mutedText}`}>{item.body}</p>
-            </li>
-          ))}
-        </ul>
-      </section>
-
-      <section aria-labelledby="features-heading" className="space-y-6">
-        <h2 id="features-heading" className="text-2xl font-bold">
-          What it does
-        </h2>
-        <ul className="grid gap-x-8 gap-y-6 sm:grid-cols-2">
-          {FEATURES.map((feature) => (
-            <li key={feature.id} className="flex gap-4">
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-purple-100 text-purple-500 dark:bg-purple-950 dark:text-purple-100">
-                <FeatureIcon id={feature.id} className="h-5 w-5" />
-              </span>
-              <span>
-                <span className="block font-semibold">{feature.title}</span>
-                <span className={`block text-sm ${mutedText}`}>{feature.body}</span>
-              </span>
-            </li>
-          ))}
-        </ul>
+        <div className={`space-y-4 text-lg leading-relaxed ${mutedText}`}>
+          <p>
+            Every player has one. A trade binder nobody has updated in two sets. A long box of bulk.
+            Three Commander decks passing one Sol Ring around. Maybe a spreadsheet that was right
+            once, for about a week.
+          </p>
+          <p>
+            The vault is where The Pile gets sorted. Put your cards in once, by searching, scanning
+            or importing a list, and the questions that used to mean digging through boxes get easy.
+            Do I own this? Which printing? Is it foil? What&apos;s it worth today? Can I build this
+            deck without buying anything?
+          </p>
+          <p>
+            No formulas to fix, no guessing at prices, and no taking a deck apart just to find out
+            you already had the card.
+          </p>
+        </div>
         <div className="flex flex-wrap gap-3 pt-2">
           <Link href="/search" className={primaryAction}>
             Search cards
@@ -98,52 +142,37 @@ export default function About() {
         </div>
       </section>
 
-      <section aria-labelledby="building-heading" className={`space-y-3 ${panel}`}>
+      <section aria-labelledby="building-heading" className={`mx-auto max-w-3xl space-y-3 ${panel}`}>
         <h2 id="building-heading" className="text-2xl font-bold">
-          Built in the open
+          Next set: in development
         </h2>
         <p className={mutedText}>
-          Magic Vault is a one-person side project, and it gets better every week. You can see
-          what&apos;s being worked on and what&apos;s next on the{" "}
-          <a
-            href={PROJECT_BOARD_URL}
-            className="font-semibold text-pink-600 underline dark:text-pink-400"
-            target="_blank"
-            rel="noreferrer"
-          >
+          Magic Vault is built in the open. The{" "}
+          <a href={PROJECT_BOARD_URL} className={linkClass} target="_blank" rel="noreferrer">
             project board
-          </a>
-          . Found a bug or have an idea?{" "}
-          <a
-            href={ISSUES_URL}
-            className="font-semibold text-pink-600 underline dark:text-pink-400"
-            target="_blank"
-            rel="noreferrer"
-          >
+          </a>{" "}
+          shows what&apos;s being worked on and what&apos;s coming next. Found a bug, or thought of
+          a card this set is missing?{" "}
+          <a href={ISSUES_URL} className={linkClass} target="_blank" rel="noreferrer">
             Open an issue on GitHub
           </a>
           .
         </p>
         {env.NEXT_PUBLIC_DONATION_URL && (
           <p className={mutedText}>
-            Want to help keep it running?{" "}
+            Want to help keep the lights on?{" "}
             <SupportLink href={env.NEXT_PUBLIC_DONATION_URL} className="font-semibold" />
           </p>
         )}
       </section>
 
-      <section aria-labelledby="credits-heading" className="space-y-3">
+      <section aria-labelledby="credits-heading" className="mx-auto max-w-3xl space-y-3">
         <h2 id="credits-heading" className="text-2xl font-bold">
           Credits
         </h2>
         <p className={mutedText}>
           Card data, prices, rulings, mana symbols and card images all come from{" "}
-          <a
-            href="https://scryfall.com"
-            className="font-semibold text-pink-600 underline dark:text-pink-400"
-            target="_blank"
-            rel="noreferrer"
-          >
+          <a href="https://scryfall.com" className={linkClass} target="_blank" rel="noreferrer">
             Scryfall
           </a>
           , who make all of it free to use. If you like Magic Vault, go give them some love too.
