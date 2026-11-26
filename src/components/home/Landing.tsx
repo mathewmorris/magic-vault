@@ -4,17 +4,9 @@ import FanContentNotice from "~/components/FanContentNotice";
 import { type FeaturedCard } from "~/server/featuredCards";
 import { signInHref } from "~/utils/signInHref";
 
-import CardSpread from "./CardSpread";
-import FeatureIcon from "./FeatureIcon";
-import { FEATURES } from "./features";
+import { BinderWindow, DeckCheck, ImportDemo, OwnedCards, SearchDemo } from "./ProductShots";
 import QuickSearch from "./QuickSearch";
-import { mutedText, panel, primaryAction, secondaryAction } from "./styles";
-
-const STEPS = [
-  { title: "Sign in", body: "Use an account you already have. It's free." },
-  { title: "Add your cards", body: "Search for them, scan them with your camera, or import a list you already have." },
-  { title: "Put them to work", body: "See what your collection is worth and build decks from cards you own." },
-];
+import { mutedText, primaryAction, secondaryAction } from "./styles";
 
 type LandingProps = {
   featuredCards: FeaturedCard[];
@@ -22,106 +14,151 @@ type LandingProps = {
   cardCount: number | null;
 };
 
+type Moment = {
+  id: string;
+  tag: string;
+  hook: string;
+  body: string;
+  link: { href: string; label: string };
+  visual: React.ReactNode;
+};
+
+const linkText =
+  "inline-flex items-center gap-1 font-semibold text-pink-600 hover:underline dark:text-pink-400 dark:hover:drop-shadow-glow";
+
 /** The home page for signed-out visitors. */
 export default function Landing({ featuredCards, cardCount }: LandingProps) {
   const signIn = signInHref("/");
 
+  const proof = [
+    cardCount ? `${cardCount.toLocaleString("en-US")} cards to search` : null,
+    "Scryfall-style search syntax",
+    "Imports from Moxfield, Archidekt, ManaBox and Deckbox",
+    "Prices refresh daily",
+    "Free, no catch",
+  ].filter((item): item is string => item !== null);
+
+  const moments: Moment[] = [
+    {
+      id: "search",
+      tag: "search",
+      hook: "Type what you mean. Get exactly that.",
+      body: "Names, types, rules text, colors, mana value, sets and formats, in the search syntax you already know from Scryfall. No account needed.",
+      link: { href: "/search", label: "Open search" },
+      visual: <SearchDemo />,
+    },
+    {
+      id: "collection",
+      tag: "collections",
+      hook: "Every copy, counted.",
+      body: "Counts, foils, condition and language for each card, with prices that refresh every day. \"Do I have one of those?\" takes two seconds, not twenty minutes in the bulk box.",
+      link: { href: signInHref("/collections"), label: "Start a collection" },
+      visual: <OwnedCards featuredCards={featuredCards} />,
+    },
+    {
+      id: "decks",
+      tag: "decks",
+      hook: "Brew from the binder, not the shopping cart.",
+      body: "Build for Commander, Modern, Pauper and more. The deck gets checked against the format's rules, and you see which cards you still need to go find.",
+      link: { href: signInHref("/decks"), label: "Build a deck" },
+      visual: <DeckCheck />,
+    },
+    {
+      id: "import",
+      tag: "import",
+      hook: "Already tracking somewhere? Bring it.",
+      body: "Paste a list or drop in a CSV from Moxfield, Archidekt, ManaBox or Deckbox, and export it back out whenever you want. Got a stack to add? Hold each card up to your camera and it reads the name for you.",
+      link: { href: signInHref("/collections"), label: "Import your cards" },
+      visual: <ImportDemo />,
+    },
+  ];
+
   return (
-    <div className="space-y-20 sm:space-y-24">
-      <section className="grid items-center gap-10 lg:grid-cols-2">
+    <div className="space-y-24 sm:space-y-32">
+      <section className="grid items-center gap-12 lg:grid-cols-[1fr_1.1fr]">
         <div className="space-y-6">
-          <p className="text-sm font-semibold uppercase tracking-widest text-pink-600 dark:text-pink-400">
-            Free Magic: The Gathering collection tracker
-          </p>
-          <h1 className="text-4xl font-bold leading-tight sm:text-5xl lg:text-6xl">
-            Every card you own,{" "}
-            <span className="bg-gradient-to-r from-purple-500 to-pink-500 bg-clip-text text-transparent dark:from-purple-300 dark:to-pink-400">
-              in one vault.
-            </span>
+          <h1 className="text-4xl font-bold leading-[1.1] tracking-tight sm:text-5xl lg:text-6xl">
+            Your binder has a search bar now
+            <span
+              aria-hidden="true"
+              className="ml-2 inline-block h-[0.8em] w-[0.4em] translate-y-[0.08em] animate-pulse bg-pink-500"
+            />
           </h1>
-          <p className={`max-w-xl text-lg ${mutedText}`}>
-            Search every Magic card, keep track of what you own and what it&apos;s worth, and build
-            decks from the cards already in your binder.
+          <p className={`max-w-lg text-lg ${mutedText}`}>
+            Magic Vault keeps track of every card you own, what it&apos;s worth today, and what
+            you&apos;re short for the next brew. Free, and nobody has to touch a spreadsheet again.
           </p>
-          <QuickSearch />
-          <div className="flex flex-wrap items-center gap-3">
+          <QuickSearch placeholder="Try t:dragon c:r mv<=4" />
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-3">
             <Link href={signIn} className={primaryAction}>
               Start your vault
             </Link>
-            <Link href="/about" className={secondaryAction}>
-              What is this?
+            <Link href="/about" className={linkText}>
+              Why this exists <span aria-hidden="true">&rarr;</span>
             </Link>
           </div>
-          {cardCount ? (
-            <p className={`text-sm ${mutedText}`}>
-              {cardCount.toLocaleString("en-US")} cards to search, updated every day.
-            </p>
-          ) : null}
+          <p className={`text-sm ${mutedText}`}>
+            Search works without an account. Go ahead, poke around.
+          </p>
         </div>
-        <CardSpread cards={featuredCards} />
+        <BinderWindow featuredCards={featuredCards} />
       </section>
 
-      <section aria-labelledby="features-heading" className="space-y-8">
-        <div className="space-y-2 text-center">
-          <h2 id="features-heading" className="text-3xl font-bold">
-            What you can do
-          </h2>
-          <p className={mutedText}>Everything here is free. Search works without an account.</p>
-        </div>
-        <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {FEATURES.map((feature) => (
-            <li key={feature.id}>
-              <Link
-                href={feature.signedIn ? signInHref(feature.href) : feature.href}
-                className={`group flex h-full flex-col gap-3 transition hover:border-pink-400 dark:hover:border-pink-700 ${panel}`}
-              >
-                <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-purple-100 text-purple-500 transition group-hover:bg-pink-100 group-hover:text-pink-600 dark:bg-purple-950 dark:text-purple-100 dark:group-hover:bg-pink-950 dark:group-hover:text-pink-300">
-                  <FeatureIcon id={feature.id} />
-                </span>
-                <span className="text-lg font-semibold">{feature.title}</span>
-                <span className={`text-sm ${mutedText}`}>{feature.body}</span>
-              </Link>
+      <section aria-label="The short version">
+        <ul className="flex flex-wrap justify-center gap-x-6 gap-y-3 border-y border-purple-100 py-5 font-mono text-xs text-gray-600 sm:text-sm dark:border-purple-900/70 dark:text-gray-400">
+          {proof.map((item) => (
+            <li key={item} className="flex items-center gap-2">
+              <span aria-hidden="true" className="h-1.5 w-1.5 shrink-0 rounded-full bg-pink-500" />
+              {item}
             </li>
           ))}
         </ul>
       </section>
 
-      <section aria-labelledby="steps-heading" className="space-y-8">
-        <h2 id="steps-heading" className="text-center text-3xl font-bold">
-          How it works
-        </h2>
-        <ol className="grid gap-4 md:grid-cols-3">
-          {STEPS.map((step, index) => (
-            <li key={step.title} className={`flex gap-4 ${panel}`}>
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-pink-600 font-bold text-white">
-                {index + 1}
-              </span>
-              <span className="space-y-1">
-                <span className="block font-semibold">{step.title}</span>
-                <span className={`block text-sm ${mutedText}`}>{step.body}</span>
-              </span>
-            </li>
-          ))}
-        </ol>
-      </section>
+      {moments.map((moment, index) => (
+        <section
+          key={moment.id}
+          aria-labelledby={`${moment.id}-heading`}
+          className="grid items-center gap-10 lg:grid-cols-2 lg:gap-16"
+        >
+          <div className={`space-y-4 ${index % 2 === 1 ? "lg:order-last" : ""}`}>
+            <p className="font-mono text-sm text-pink-600 dark:text-pink-400">/{moment.tag}</p>
+            <h2
+              id={`${moment.id}-heading`}
+              className="text-3xl font-bold tracking-tight sm:text-4xl"
+            >
+              {moment.hook}
+            </h2>
+            <p className={`max-w-md text-lg ${mutedText}`}>{moment.body}</p>
+            <Link href={moment.link.href} className={linkText}>
+              {moment.link.label} <span aria-hidden="true">&rarr;</span>
+            </Link>
+          </div>
+          <div className="mx-auto w-full max-w-lg">{moment.visual}</div>
+        </section>
+      ))}
 
-      <section className="rounded-3xl bg-gradient-to-br from-purple-500 via-purple-700 to-pink-700 px-6 py-12 text-center text-white sm:px-12">
-        <h2 className="text-3xl font-bold">Ready to open the vault?</h2>
-        <p className="mx-auto mt-3 max-w-lg text-purple-100">
-          Make a collection, add a few cards, and see what your pile is really worth.
+      <section
+        aria-labelledby="closing-heading"
+        className="relative isolate mx-auto max-w-3xl space-y-6 text-center"
+      >
+        <div
+          aria-hidden="true"
+          className="absolute inset-x-10 top-1/2 -z-10 h-32 -translate-y-1/2 rounded-full bg-purple-500/20 blur-3xl dark:bg-pink-600/20"
+        />
+        <h2 id="closing-heading" className="text-4xl font-bold tracking-tight sm:text-5xl">
+          Go find that one card.
+        </h2>
+        <p className={`mx-auto max-w-xl text-lg ${mutedText}`}>
+          You know the one. You&apos;re sure you own it, and it&apos;s in a box somewhere. Make a
+          vault, add the box, and next time it takes one search.
         </p>
-        <div className="mt-6 flex flex-wrap justify-center gap-3">
-          <Link
-            href={signIn}
-            className="inline-flex items-center justify-center rounded-full bg-white px-5 py-2.5 font-semibold text-purple-700 transition hover:bg-pink-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-pink-300"
-          >
-            Sign in, it&apos;s free
+        <div className="flex flex-wrap justify-center gap-3">
+          <Link href={signIn} className={primaryAction}>
+            Start your vault
           </Link>
-          <Link
-            href="/search"
-            className="inline-flex items-center justify-center rounded-full border border-white/70 px-5 py-2.5 font-semibold text-white transition hover:bg-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-pink-300"
-          >
-            Just browse cards
+          <Link href="/search" className={secondaryAction}>
+            Just search for now
           </Link>
         </div>
       </section>

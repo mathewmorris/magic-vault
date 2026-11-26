@@ -3,8 +3,6 @@ import Image from "next/image";
 import Link from "next/link";
 
 import FanContentNotice from "~/components/FanContentNotice";
-import FeatureIcon from "~/components/home/FeatureIcon";
-import { FEATURES } from "~/components/home/features";
 import { mutedText, panel, primaryAction, secondaryAction } from "~/components/home/styles";
 import SupportLink from "~/components/SupportLink";
 import { env } from "~/env";
@@ -18,77 +16,81 @@ export const metadata: Metadata = {
 const PROJECT_BOARD_URL = "https://github.com/users/mathewmorris/projects/2?pane=info";
 const ISSUES_URL = "https://github.com/mathewmorris/magic-vault/issues";
 
-const AUDIENCE = [
+const inlineLink = "font-semibold text-pink-600 underline dark:text-pink-400";
+
+const WHAT_IT_DOES = [
   {
-    title: "Collectors",
-    body: "You've got binders and boxes and a rough idea what's in them. Now you can know exactly, and see what it's all worth.",
+    tag: "search",
+    text: "Look up any card by name, type, rules text, colors, mana value, set or format, with Scryfall-style syntax. No account needed.",
   },
   {
-    title: "Deck builders",
-    body: "You want to brew from what you already own, and only buy the few cards you're missing.",
+    tag: "collections",
+    text: "Log every copy you own with its count, foil, condition and language.",
   },
   {
-    title: "Spreadsheet escapees",
-    body: "You've been tracking cards in a sheet. Import it and let the app keep the prices and printings straight.",
+    tag: "prices",
+    text: "Prices refresh every day, and each collection keeps a running total.",
+  },
+  {
+    tag: "decks",
+    text: "Build for Commander, Modern, Pauper and more. The deck gets checked against the format's rules, and you see what you still need.",
+  },
+  {
+    tag: "import",
+    text: "Bring a list or CSV from Moxfield, Archidekt, ManaBox or Deckbox, and export it back out any time.",
+  },
+  {
+    tag: "scan",
+    text: "Hold a card up to your phone or webcam and it reads the name and adds it for you.",
   },
 ];
 
 export default function About() {
   return (
-    <div className="mx-auto max-w-4xl space-y-16">
-      <header className="flex flex-col items-start gap-6 sm:flex-row sm:items-center">
+    <div className="mx-auto max-w-3xl space-y-16">
+      <header className="space-y-8">
         <Image
           src="/magicvault-logo.png"
           alt=""
-          width={96}
-          height={96}
+          width={72}
+          height={72}
           className="rounded-2xl shadow-lg shadow-purple-900/30"
         />
-        <div className="space-y-3">
-          <p className="text-sm font-semibold uppercase tracking-widest text-pink-600 dark:text-pink-400">
-            About
-          </p>
-          <h1 className="text-4xl font-bold sm:text-5xl">Your cards, sorted.</h1>
-          <p className={`text-lg ${mutedText}`}>
-            Magic Vault is a free web app for keeping track of your Magic: The Gathering cards. Look
-            up any card, log what you own, see what it&apos;s worth, and build decks from your own
-            collection.
-          </p>
-        </div>
+        <h1 className="text-4xl font-bold leading-tight tracking-tight sm:text-5xl">
+          It always starts with a spreadsheet.
+        </h1>
       </header>
 
-      <section aria-labelledby="audience-heading" className="space-y-6">
-        <h2 id="audience-heading" className="text-2xl font-bold">
-          Who it&apos;s for
-        </h2>
-        <ul className="grid gap-4 md:grid-cols-3">
-          {AUDIENCE.map((item) => (
-            <li key={item.title} className={panel}>
-              <h3 className="font-semibold">{item.title}</h3>
-              <p className={`mt-2 text-sm ${mutedText}`}>{item.body}</p>
-            </li>
-          ))}
-        </ul>
+      <section aria-label="Why Magic Vault exists" className={`space-y-5 text-lg leading-relaxed ${mutedText}`}>
+        <p>
+          The collection outgrows the shoebox. Then the binder. Then the second binder. So you start
+          a spreadsheet, and for about a week it&apos;s great.
+        </p>
+        <p>
+          Then you crack a few packs and don&apos;t log them. Prices move. Somebody at the shop asks
+          if you still have that card for their deck, and you honestly don&apos;t know. Is it in the
+          trade binder? Did it go into a Commander deck? Did you trade it away last spring?
+        </p>
+        <p className="text-gray-900 dark:text-white">
+          Magic Vault is the thing we wanted instead of the spreadsheet. One place that knows
+          what&apos;s in the binder, what it&apos;s worth today, and which of those cards can go
+          into the next brew.
+        </p>
       </section>
 
-      <section aria-labelledby="features-heading" className="space-y-6">
-        <h2 id="features-heading" className="text-2xl font-bold">
+      <section aria-labelledby="does-heading" className="space-y-6">
+        <h2 id="does-heading" className="text-2xl font-bold">
           What it does
         </h2>
-        <ul className="grid gap-x-8 gap-y-6 sm:grid-cols-2">
-          {FEATURES.map((feature) => (
-            <li key={feature.id} className="flex gap-4">
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-purple-100 text-purple-500 dark:bg-purple-950 dark:text-purple-100">
-                <FeatureIcon id={feature.id} className="h-5 w-5" />
-              </span>
-              <span>
-                <span className="block font-semibold">{feature.title}</span>
-                <span className={`block text-sm ${mutedText}`}>{feature.body}</span>
-              </span>
-            </li>
+        <dl className="divide-y divide-purple-100 border-y border-purple-100 dark:divide-purple-900/60 dark:border-purple-900/60">
+          {WHAT_IT_DOES.map((item) => (
+            <div key={item.tag} className="grid gap-1 py-4 sm:grid-cols-[9rem_1fr] sm:gap-6">
+              <dt className="font-mono text-sm text-pink-600 dark:text-pink-400">/{item.tag}</dt>
+              <dd className={mutedText}>{item.text}</dd>
+            </div>
           ))}
-        </ul>
-        <div className="flex flex-wrap gap-3 pt-2">
+        </dl>
+        <div className="flex flex-wrap gap-3">
           <Link href="/search" className={primaryAction}>
             Search cards
           </Link>
@@ -103,30 +105,20 @@ export default function About() {
           Built in the open
         </h2>
         <p className={mutedText}>
-          Magic Vault is a one-person side project, and it gets better every week. You can see
-          what&apos;s being worked on and what&apos;s next on the{" "}
-          <a
-            href={PROJECT_BOARD_URL}
-            className="font-semibold text-pink-600 underline dark:text-pink-400"
-            target="_blank"
-            rel="noreferrer"
-          >
+          Magic Vault is a side project, and the whole thing happens in public. What&apos;s being
+          worked on and what&apos;s coming next is all on the{" "}
+          <a href={PROJECT_BOARD_URL} className={inlineLink} target="_blank" rel="noreferrer">
             project board
           </a>
-          . Found a bug or have an idea?{" "}
-          <a
-            href={ISSUES_URL}
-            className="font-semibold text-pink-600 underline dark:text-pink-400"
-            target="_blank"
-            rel="noreferrer"
-          >
+          . Found a bug, or want something that isn&apos;t here yet?{" "}
+          <a href={ISSUES_URL} className={inlineLink} target="_blank" rel="noreferrer">
             Open an issue on GitHub
           </a>
           .
         </p>
         {env.NEXT_PUBLIC_DONATION_URL && (
           <p className={mutedText}>
-            Want to help keep it running?{" "}
+            The app is free. The servers aren&apos;t.{" "}
             <SupportLink href={env.NEXT_PUBLIC_DONATION_URL} className="font-semibold" />
           </p>
         )}
@@ -138,15 +130,11 @@ export default function About() {
         </h2>
         <p className={mutedText}>
           Card data, prices, rulings, mana symbols and card images all come from{" "}
-          <a
-            href="https://scryfall.com"
-            className="font-semibold text-pink-600 underline dark:text-pink-400"
-            target="_blank"
-            rel="noreferrer"
-          >
+          <a href="https://scryfall.com" className={inlineLink} target="_blank" rel="noreferrer">
             Scryfall
           </a>
-          , who make all of it free to use. If you like Magic Vault, go give them some love too.
+          , who make all of it free to use. None of this works without them, so go give them some
+          love too.
         </p>
         <FanContentNotice />
       </section>
