@@ -36,6 +36,7 @@ Pulled from Vercel with `npm run vercel:env`. See [.env.example](./.env.example)
 | `AFFILIATE_LINKS` | No | `on` or `off` (default `off`). Turns affiliate tracking on buy links on or off. While off, buy links use Scryfall's own store links and no disclosure shows. Redeploy after changing it. |
 | `TCGPLAYER_AFFILIATE_URL` | No | TCGplayer tracking link from Impact (must be `https://`), like `https://partner.tcgplayer.com/c/<account>/<ad>/21018`. The product page goes on the end as `?u=`. Used only while `AFFILIATE_LINKS=on`. |
 | `CARDKINGDOM_PARTNER_ID` | No | Card Kingdom partner ID, sent as `?partner=`. Used only while `AFFILIATE_LINKS=on`. |
+| `NEXT_PUBLIC_FEATURE_AI_SCAN` | No | `on` or `off` (default `off`). Turns the AI scanner on /scan on or off. While off, /scan uses title OCR and the scan API answers 404. Read at build time, so redeploy after changing it. Setup: [docs/card-recognition.md](docs/card-recognition.md). |
 
 ## Scripts
 
