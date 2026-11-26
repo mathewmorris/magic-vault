@@ -50,6 +50,10 @@ model Card {
 
   @@index([oracle_id])
   @@index([set, collector_number])
+  // Trigram indexes for the "contains" searches on /search. The pg_trgm
+  // extension is created in the migration that adds them.
+  @@index([name(ops: raw("gin_trgm_ops"))], type: Gin)
+  @@index([oracle_text(ops: raw("gin_trgm_ops"))], type: Gin)
 }
 
 model Collection {
