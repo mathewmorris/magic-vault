@@ -1,0 +1,35 @@
+name: Feedback
+description: General thoughts on using Magic Vault. Good, bad or confusing.
+title: "[Feedback]: "
+labels: ["needs discussion"]
+projects: ["mathewmorris/2"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        No bug or big idea needed. Just tell us how it's going. Fill in whatever applies and skip the rest.
+  - type: textarea
+    id: working
+    attributes:
+      label: What's working well?
+    validations:
+      required: false
+  - type: textarea
+    id: annoying
+    attributes:
+      label: What's annoying?
+    validations:
+      required: false
+  - type: textarea
+    id: confusing
+    attributes:
+      label: Anything confusing?
+      description: Spots where you weren't sure what to do or what something meant.
+    validations:
+      required: false
+  - type: textarea
+    id: anything-else
+    attributes:
+      label: Anything else?
+    validations:
+      required: false
