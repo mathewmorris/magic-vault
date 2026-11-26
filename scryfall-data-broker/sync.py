@@ -18,6 +18,7 @@
 # dry run, so a failed or dry run leaves the next run to pick up the changes.
 import argparse
 import hashlib
+import io
 import json
 import logging
 import logging.config
@@ -145,11 +146,44 @@ class SyncPlan:
 # Reading and writing
 ###################################################
 
-def iter_cards(path):
-    """Stream cards out of a bulk file without loading it whole."""
-    import ijson
+def _open_bulk(path):
+    """Open a bulk file, transparently un-gzipping it if needed."""
     with open(path, 'rb') as f:
-        yield from ijson.items(f, 'item', use_float=True)
+        magic = f.read(2)
+    if magic == b'\x1f\x8b':
+        import gzip
+        return gzip.open(path, 'rb')
+    return open(path, 'rb')
+
+
+def _first_byte(f):
+    """The first non-whitespace byte, leaving the stream where it was."""
+    while True:
+        chunk = f.peek(64) if hasattr(f, 'peek') else b''
+        stripped = chunk.lstrip()
+        if stripped:
+            return stripped[:1]
+        if not chunk:
+            return b''
+        f.read(len(chunk))
+
+
+def iter_cards(path):
+    """Stream cards out of a bulk file without loading it whole.
+
+    Handles both Scryfall formats: a JSON array (download_uri) and JSON Lines,
+    one card per line (jsonl_download_uri), gzipped or not.
+    """
+    with _open_bulk(path) as raw:
+        f = raw if hasattr(raw, 'peek') else io.BufferedReader(raw)
+        if _first_byte(f) == b'[':
+            import ijson
+            yield from ijson.items(f, 'item', use_float=True)
+            return
+        for line in f:
+            line = line.strip()
+            if line:
+                yield json.loads(line)
 
 
 def _batches(items, size):
@@ -241,15 +275,22 @@ def fetch_bulk_entry(bulk_type=BULK_TYPE, get=None):
         return response.json()
 
     entry = find_bulk_entry(fetch(BULK_DATA_URL), bulk_type)
-    if entry.get('download_uri'):
-        return entry
-    logger.info('Listing entry has no download_uri (keys: %s), reading %s',
-                sorted(entry), bulk_type_url(bulk_type))
-    single = fetch(bulk_type_url(bulk_type))
-    if not single.get('download_uri'):
+    uri = bulk_download_uri(entry)
+    if not uri:
+        logger.info('Listing entry has no download link (keys: %s), reading %s',
+                    sorted(entry), bulk_type_url(bulk_type))
+        entry = {**entry, **fetch(bulk_type_url(bulk_type))}
+        uri = bulk_download_uri(entry)
+    if not uri:
         raise LookupError(
-            f'no download_uri for {bulk_type} (keys: {sorted(single)})')
-    return {**entry, **single}
+            f'no download link for {bulk_type} (keys: {sorted(entry)})')
+    return {**entry, 'download_uri': uri}
+
+
+def bulk_download_uri(entry):
+    """Scryfall now offers JSON Lines (jsonl_download_uri); older objects had
+    a JSON array at download_uri. iter_cards reads either."""
+    return entry.get('download_uri') or entry.get('jsonl_download_uri')
 
 
 def download(uri, out_path):
