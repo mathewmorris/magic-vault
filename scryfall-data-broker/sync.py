@@ -219,11 +219,37 @@ def check_download_uri(uri):
     return uri
 
 
-def fetch_bulk_entry(bulk_type=BULK_TYPE):
-    import requests
-    response = requests.get(BULK_DATA_URL, headers=HEADERS, timeout=30)
-    response.raise_for_status()
-    return find_bulk_entry(response.json(), bulk_type)
+def bulk_type_url(bulk_type=BULK_TYPE):
+    """The single-type endpoint, e.g. /bulk-data/default-cards."""
+    return f"{BULK_DATA_URL}/{bulk_type.replace('_', '-')}"
+
+
+def fetch_bulk_entry(bulk_type=BULK_TYPE, get=None):
+    """Return the bulk-data object for bulk_type, with its download_uri.
+
+    The listing at /bulk-data doesn't always carry download_uri, so when it's
+    missing, read the single-type object (/bulk-data/default-cards), which is
+    what the seed and the older broker scripts use.
+    """
+    if get is None:
+        import requests
+        get = requests.get
+
+    def fetch(url):
+        response = get(url, headers=HEADERS, timeout=30)
+        response.raise_for_status()
+        return response.json()
+
+    entry = find_bulk_entry(fetch(BULK_DATA_URL), bulk_type)
+    if entry.get('download_uri'):
+        return entry
+    logger.info('Listing entry has no download_uri (keys: %s), reading %s',
+                sorted(entry), bulk_type_url(bulk_type))
+    single = fetch(bulk_type_url(bulk_type))
+    if not single.get('download_uri'):
+        raise LookupError(
+            f'no download_uri for {bulk_type} (keys: {sorted(single)})')
+    return {**entry, **single}
 
 
 def download(uri, out_path):
