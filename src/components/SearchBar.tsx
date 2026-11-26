@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { useState } from "react";
 import { api } from "~/utils/api";
+import { smallImageUrl } from "~/utils/cardImage";
 import Button from "./Button";
 import Spinner from "./Spinner";
 
@@ -70,14 +71,14 @@ export default function SearchBar({ onSelectedChange, onAddCard }: SearchBarProp
       <div className="grid grid-cols-5 gap-4">
         {searchResults?.pages?.map((page) => {
           return page.items.map(card => {
-            const images = card.image_uris as { small: string } | null;
+            const image = smallImageUrl(card);
 
             return (
               <div key={card.id}>
                 <div
                   className="grid justify-center"
                 >
-                  {images?.small && <Image src={images.small} width={146} height={204} alt={card.name} className="m-2 rounded-lg" />}
+                  {image ? <Image src={image} width={146} height={204} alt={card.name} className="m-2 rounded-lg" /> : <p className="m-2 text-center">{card.name}</p>}
                 </div>
                 {onAddCard ?
                   <Button type="button" onClick={() => onAddCard(card.id)}>Add Card</Button> :
