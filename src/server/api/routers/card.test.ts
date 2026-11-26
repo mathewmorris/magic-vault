@@ -1,7 +1,21 @@
 import prismaMock from "singleton";
-import { type Card } from "@prisma/client";
+import { Prisma, type Card } from "@prisma/client";
 import { createInnerTRPCContext } from "../trpc";
 import { appRouter } from "../root";
+import { isScryfallFallbackEnabled, scryfall } from "../../scryfall/client";
+
+jest.mock("../../scryfall/client", () => ({
+  ...jest.requireActual<object>("../../scryfall/client"),
+  isScryfallFallbackEnabled: jest.fn(() => false),
+  scryfall: { searchByName: jest.fn() },
+}));
+
+const fallbackEnabled = isScryfallFallbackEnabled as jest.MockedFunction<
+  typeof isScryfallFallbackEnabled
+>;
+const searchByName = scryfall.searchByName as jest.MockedFunction<
+  typeof scryfall.searchByName
+>;
 
 describe("card procedures", () => {
   const buildCard = (overrides: Partial<Card> = {}): Card => ({
@@ -23,6 +37,7 @@ describe("card procedures", () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    fallbackEnabled.mockReturnValue(false);
   });
 
   describe("findMany", () => {
@@ -105,6 +120,102 @@ describe("card procedures", () => {
       const caller = callerWithoutSession();
 
       await expect(caller.card.search({ name: "" })).rejects.toThrow();
+    });
+  });
+  describe("search Scryfall fallback", () => {
+    const scryfallCard = {
+      id: "new-1",
+      name: "Brand New Card",
+      scryfall_uri: "https://scryfall.com/card/new/1/brand-new-card",
+      image_status: "highres_scan",
+      layout: "normal",
+      image_uris: { small: "https://cards.scryfall.io/small/new.jpg" },
+    };
+
+    beforeEach(() => {
+      fallbackEnabled.mockReturnValue(true);
+    });
+
+    test("does not call Scryfall when the flag is off", async () => {
+      fallbackEnabled.mockReturnValue(false);
+      prismaMock.card.findMany.mockResolvedValue([]);
+
+      const result = await callerWithoutSession().card.search({ name: "brand new" });
+
+      expect(result).toStrictEqual({ items: [], nextCursor: undefined });
+      expect(searchByName).not.toHaveBeenCalled();
+    });
+
+    test("does not call Scryfall when local results exist", async () => {
+      prismaMock.card.findMany.mockResolvedValue([buildCard()]);
+
+      await callerWithoutSession().card.search({ name: "lotus" });
+
+      expect(searchByName).not.toHaveBeenCalled();
+    });
+
+    test("does not call Scryfall for later pages", async () => {
+      prismaMock.card.findMany.mockResolvedValue([]);
+
+      await callerWithoutSession().card.search({ name: "lotus", cursor: "page-2" });
+
+      expect(searchByName).not.toHaveBeenCalled();
+    });
+
+    test("caches Scryfall results on a local miss and returns them", async () => {
+      const stored = buildCard({ id: "new-1", name: "Brand New Card" });
+      prismaMock.card.findMany.mockResolvedValueOnce([]).mockResolvedValueOnce([stored]);
+      prismaMock.card.createMany.mockResolvedValue({ count: 1 });
+      searchByName.mockResolvedValue({ status: "ok", cards: [scryfallCard] });
+
+      const result = await callerWithoutSession().card.search({ name: "brand new" });
+
+      expect(searchByName).toHaveBeenCalledWith("brand new");
+      expect(prismaMock.card.createMany).toHaveBeenCalledWith({
+        data: [
+          {
+            id: "new-1",
+            name: "Brand New Card",
+            scryfall_uri: "https://scryfall.com/card/new/1/brand-new-card",
+            image_status: "highres_scan",
+            layout: "normal",
+            image_uris: { small: "https://cards.scryfall.io/small/new.jpg" },
+            card_faces: Prisma.DbNull,
+            all_parts: Prisma.DbNull,
+          },
+        ],
+        skipDuplicates: true,
+      });
+      expect(prismaMock.card.findMany).toHaveBeenCalledTimes(2);
+      expect(result).toStrictEqual({ items: [stored], nextCursor: undefined });
+    });
+
+    test.each([
+      [{ status: "not_found" as const }],
+      [{ status: "rate_limited" as const }],
+      [{ status: "skipped" as const, reason: "query too short" }],
+      [{ status: "error" as const, message: "Scryfall returned 503" }],
+    ])("returns the empty local result when Scryfall answers %j", async (outcome) => {
+      jest.spyOn(console, "warn").mockImplementation(() => undefined);
+      prismaMock.card.findMany.mockResolvedValue([]);
+      searchByName.mockResolvedValue(outcome);
+
+      const result = await callerWithoutSession().card.search({ name: "nothing here" });
+
+      expect(result).toStrictEqual({ items: [], nextCursor: undefined });
+      expect(prismaMock.card.createMany).not.toHaveBeenCalled();
+      expect(prismaMock.card.findMany).toHaveBeenCalledTimes(1);
+    });
+
+    test("still answers when caching fails", async () => {
+      jest.spyOn(console, "error").mockImplementation(() => undefined);
+      prismaMock.card.findMany.mockResolvedValue([]);
+      prismaMock.card.createMany.mockRejectedValue(new Error("db down"));
+      searchByName.mockResolvedValue({ status: "ok", cards: [scryfallCard] });
+
+      const result = await callerWithoutSession().card.search({ name: "brand new" });
+
+      expect(result).toStrictEqual({ items: [], nextCursor: undefined });
     });
   });
 });
