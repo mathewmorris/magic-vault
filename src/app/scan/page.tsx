@@ -23,6 +23,7 @@ import type { Worker as TesseractWorker } from "tesseract.js";
 import Button from "~/components/Button";
 import CameraFeed from "~/components/CameraFeed";
 import { api, type RouterOutputs } from "~/utils/api";
+import { smallImageUrl } from "~/utils/cardImage";
 import { classifyCameraError, type CameraErrorInfo } from "~/utils/scan/cameraError";
 import { cardGuideRect, titleStripRect, type Rect } from "~/utils/scan/cardGuide";
 import { extractCardName } from "~/utils/scan/cleanOcrText";
@@ -37,14 +38,6 @@ type Phase = "ready" | "reading" | "searching" | "done" | "error";
 // extra word searches.
 const GOOD_ENOUGH_SCORE = 0.9;
 const SEARCH_LIMIT = 100;
-
-/** Small card image, falling back to the front face for double-faced cards. */
-function smallImageUrl(card: Card): string | null {
-  const images = card.image_uris as { small?: string } | null;
-  if (images?.small) return images.small;
-  const faces = card.card_faces as { image_uris?: { small?: string } }[] | null;
-  return faces?.[0]?.image_uris?.small ?? null;
-}
 
 /**
  * Copy the title strip out of the captured frame, scaled up and in grayscale,

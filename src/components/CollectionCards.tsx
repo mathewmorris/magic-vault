@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { type RouterOutputs } from "~/utils/api";
+import { smallImageUrl } from "~/utils/cardImage";
 import Button from "./Button";
 
 export type CollectionCard = RouterOutputs["collection"]["cards"][number];
@@ -30,13 +31,13 @@ export default function CollectionCards({
   return (
     <ul className="grid grid-cols-2 gap-4 md:grid-cols-4 lg:grid-cols-5">
       {cards.map(({ card, count }) => {
-        const images = card.image_uris as { small?: string } | null;
+        const image = smallImageUrl(card);
 
         return (
           <li key={card.id} className="flex flex-col items-center gap-2">
-            {images?.small ? (
+            {image ? (
               <Image
-                src={images.small}
+                src={image}
                 width={146}
                 height={204}
                 alt={card.name}
