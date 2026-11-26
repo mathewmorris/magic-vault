@@ -381,6 +381,14 @@ class FetchBulkEntryTest(unittest.TestCase):
         self.assertEqual(entry['updated_at'], 'u2')
         self.assertEqual(calls, [sync.BULK_DATA_URL, url])
 
+    def test_accepts_jsonl_download_uri(self):
+        entry = {'type': 'default_cards', 'updated_at': 'u1',
+                 'jsonl_download_uri': 'https://data.scryfall.io/default-cards/d.jsonl'}
+        get, calls = self.fake_get({sync.BULK_DATA_URL: {'data': [entry]}})
+        got = sync.fetch_bulk_entry(get=get)
+        self.assertEqual(got['download_uri'], entry['jsonl_download_uri'])
+        self.assertEqual(calls, [sync.BULK_DATA_URL])
+
     def test_raises_with_keys_when_no_download_uri_anywhere(self):
         listing = {'data': [{'type': 'default_cards'}]}
         url = 'https://api.scryfall.com/bulk-data/default-cards'
@@ -389,6 +397,37 @@ class FetchBulkEntryTest(unittest.TestCase):
         with self.assertRaises(LookupError) as ctx:
             sync.fetch_bulk_entry(get=get)
         self.assertIn('uri', str(ctx.exception))
+
+
+class IterCardsFormatsTest(unittest.TestCase):
+    CARDS = [{'id': 'a', 'name': 'One', 'cmc': 1.0},
+             {'id': 'b', 'name': 'Two', 'cmc': 2.5}]
+
+    def write(self, data, gz=False):
+        import gzip
+        import tempfile
+        fd, path = tempfile.mkstemp()
+        os.close(fd)
+        self.addCleanup(os.remove, path)
+        opener = gzip.open if gz else open
+        with opener(path, 'wb') as f:
+            f.write(data)
+        return path
+
+    def jsonl(self):
+        return ('\n'.join(json.dumps(c) for c in self.CARDS) + '\n').encode()
+
+    def test_reads_json_lines(self):
+        self.assertEqual(list(sync.iter_cards(self.write(self.jsonl()))), self.CARDS)
+
+    def test_reads_gzipped_json_lines(self):
+        path = self.write(self.jsonl(), gz=True)
+        self.assertEqual(list(sync.iter_cards(path)), self.CARDS)
+
+    @unittest.skipUnless(HAVE_IJSON, 'ijson not installed')
+    def test_reads_json_array_with_leading_whitespace(self):
+        path = self.write(b'  \n' + json.dumps(self.CARDS).encode())
+        self.assertEqual(list(sync.iter_cards(path)), self.CARDS)
 
 
 if __name__ == '__main__':
