@@ -344,5 +344,52 @@ class IterCardsTest(unittest.TestCase):
         self.assertEqual(hashes_for(cards), hashes_for(expected))
 
 
+class FetchBulkEntryTest(unittest.TestCase):
+    class Resp:
+        def __init__(self, body):
+            self.body = body
+
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return self.body
+
+    def fake_get(self, pages):
+        calls = []
+
+        def get(url, **kwargs):
+            calls.append(url)
+            return self.Resp(pages[url])
+        return get, calls
+
+    def test_uses_listing_entry_when_it_has_download_uri(self):
+        entry = {'type': 'default_cards', 'updated_at': 'u1',
+                 'download_uri': 'https://data.scryfall.io/default-cards/d.json'}
+        get, calls = self.fake_get({sync.BULK_DATA_URL: {'data': [entry]}})
+        self.assertEqual(sync.fetch_bulk_entry(get=get), entry)
+        self.assertEqual(calls, [sync.BULK_DATA_URL])
+
+    def test_falls_back_to_single_type_endpoint(self):
+        listing = {'data': [{'type': 'default_cards', 'updated_at': 'u1'}]}
+        single = {'type': 'default_cards', 'updated_at': 'u2',
+                  'download_uri': 'https://data.scryfall.io/default-cards/d.json'}
+        url = 'https://api.scryfall.com/bulk-data/default-cards'
+        get, calls = self.fake_get({sync.BULK_DATA_URL: listing, url: single})
+        entry = sync.fetch_bulk_entry(get=get)
+        self.assertEqual(entry['download_uri'], single['download_uri'])
+        self.assertEqual(entry['updated_at'], 'u2')
+        self.assertEqual(calls, [sync.BULK_DATA_URL, url])
+
+    def test_raises_with_keys_when_no_download_uri_anywhere(self):
+        listing = {'data': [{'type': 'default_cards'}]}
+        url = 'https://api.scryfall.com/bulk-data/default-cards'
+        get, _ = self.fake_get({sync.BULK_DATA_URL: listing,
+                                url: {'type': 'default_cards', 'uri': 'x'}})
+        with self.assertRaises(LookupError) as ctx:
+            sync.fetch_bulk_entry(get=get)
+        self.assertIn('uri', str(ctx.exception))
+
+
 if __name__ == '__main__':
     unittest.main()
