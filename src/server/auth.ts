@@ -50,10 +50,10 @@ export const authOptions: NextAuthOptions = {
   },
   adapter: PrismaAdapter(prisma),
   providers: [
-    EmailProvider({
-      server: env.EMAIL_SERVER ?? "",
-      from: env.EMAIL_FROM ?? "",
-    }),
+    // Magic-link sign-in only when an SMTP server and sender are configured.
+    ...(env.EMAIL_SERVER && env.EMAIL_FROM
+      ? [EmailProvider({ server: env.EMAIL_SERVER, from: env.EMAIL_FROM })]
+      : []),
     DiscordProvider({
       clientId: env.DISCORD_CLIENT_ID ?? "",
       clientSecret: env.DISCORD_CLIENT_SECRET ?? "",
