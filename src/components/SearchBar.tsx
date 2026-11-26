@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { useState } from "react";
 import { api } from "~/utils/api";
 import { smallImageUrl } from "~/utils/cardImage";
@@ -80,6 +81,9 @@ export default function SearchBar({ onSelectedChange, onAddCard }: SearchBarProp
                 >
                   {image ? <Image src={image} width={146} height={204} alt={card.name} className="m-2 rounded-lg" /> : <p className="m-2 text-center">{card.name}</p>}
                 </div>
+                <Link href={`/card/${card.id}`} className="mb-2 block text-center text-sm underline">
+                  {card.name}
+                </Link>
                 {onAddCard ?
                   <Button type="button" onClick={() => onAddCard(card.id)}>Add Card</Button> :
                   selectedCards.includes(card.id) ?

@@ -2,10 +2,13 @@ import {
   MIN_REQUEST_GAP_MS,
   NEGATIVE_CACHE_MS,
   RATE_LIMIT_COOLDOWN_MS,
+  RULINGS_CACHE_MS,
   SCRYFALL_HEADERS,
   buildNameQuery,
   createScryfallClient,
   isScryfallFallbackEnabled,
+  isScryfallId,
+  readRulings,
   type ScryfallCard,
 } from "./client";
 
@@ -216,5 +219,105 @@ describe("scryfall client searchByName", () => {
     } finally {
       jest.useRealTimers();
     }
+  });
+});
+
+describe("isScryfallId", () => {
+  test("accepts UUIDs and rejects anything else", () => {
+    expect(isScryfallId("bd8fa327-dd41-4737-8f19-2cf5eb1f7cdd")).toBe(true);
+    expect(isScryfallId("BD8FA327-DD41-4737-8F19-2CF5EB1F7CDD")).toBe(true);
+    expect(isScryfallId("card-1")).toBe(false);
+    expect(isScryfallId("../search?q=lotus")).toBe(false);
+    expect(isScryfallId("bd8fa327-dd41-4737-8f19-2cf5eb1f7cdd/../x")).toBe(false);
+  });
+});
+
+describe("readRulings", () => {
+  test("keeps well-formed rulings and drops the rest", () => {
+    expect(
+      readRulings({
+        object: "list",
+        data: [
+          { object: "ruling", source: "wotc", published_at: "2004-10-04", comment: "First." },
+          { object: "ruling", source: "wotc", comment: "No date." },
+          "junk",
+          null,
+        ],
+      }),
+    ).toEqual([{ source: "wotc", published_at: "2004-10-04", comment: "First." }]);
+    expect(readRulings(null)).toEqual([]);
+    expect(readRulings({ data: "nope" })).toEqual([]);
+  });
+});
+
+describe("scryfall client getRulings", () => {
+  const id = "bd8fa327-dd41-4737-8f19-2cf5eb1f7cdd";
+  const ruling = { object: "ruling", source: "wotc", published_at: "2004-10-04", comment: "A ruling." };
+  const rulingsList = () => jsonResponse(200, { object: "list", has_more: false, data: [ruling] });
+  const expected = { status: "ok", rulings: [{ source: "wotc", published_at: "2004-10-04", comment: "A ruling." }] };
+
+  test("fetches /cards/:id/rulings with the Scryfall headers", async () => {
+    const { client, fetchImpl } = setup([rulingsList()]);
+
+    await expect(client.getRulings(id)).resolves.toEqual(expected);
+
+    const [url, init] = fetchImpl.mock.calls[0]!;
+    expect(url).toBe(`https://api.scryfall.com/cards/${id}/rulings`);
+    expect(init?.headers).toEqual(SCRYFALL_HEADERS);
+    expect(init?.signal).toBeInstanceOf(AbortSignal);
+  });
+
+  test("never sends an id that isn't a UUID", async () => {
+    const { client, fetchImpl } = setup([]);
+
+    await expect(client.getRulings("../search?q=x")).resolves.toEqual({
+      status: "skipped",
+      reason: "not a Scryfall card id",
+    });
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  test("keeps rulings for a day", async () => {
+    const { client, fetchImpl, advance } = setup([rulingsList(), rulingsList()]);
+
+    await client.getRulings(id);
+    advance(RULINGS_CACHE_MS - 1_000);
+    await expect(client.getRulings(id.toUpperCase())).resolves.toEqual(expected);
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+
+    advance(2_000);
+    await expect(client.getRulings(id)).resolves.toEqual(expected);
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+  });
+
+  test("treats 404 as no rulings", async () => {
+    const { client } = setup([notFound()]);
+
+    await expect(client.getRulings(id)).resolves.toEqual({ status: "ok", rulings: [] });
+  });
+
+  test("doesn't keep errors, so the next call tries again", async () => {
+    const { client, fetchImpl } = setup([jsonResponse(503, {}), rulingsList()]);
+
+    await expect(client.getRulings(id)).resolves.toEqual({
+      status: "error",
+      message: "Scryfall returned 503",
+    });
+    await expect(client.getRulings(id)).resolves.toEqual(expected);
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+  });
+
+  test("shares the search spacing and the 429 pause", async () => {
+    const { client, requestTimes, fetchImpl } = setup([
+      notFound(),
+      jsonResponse(429, { object: "error", status: 429 }),
+    ]);
+
+    await Promise.all([client.searchByName("lotus"), client.getRulings(id)]);
+    expect(requestTimes[1]! - requestTimes[0]!).toBeGreaterThanOrEqual(MIN_REQUEST_GAP_MS);
+
+    await expect(client.searchByName("mox pearl")).resolves.toEqual({ status: "rate_limited" });
+    await expect(client.getRulings(id)).resolves.toEqual({ status: "rate_limited" });
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
   });
 });

@@ -4,11 +4,12 @@ import { createInnerTRPCContext } from "../trpc";
 import { appRouter } from "../root";
 import { isScryfallFallbackEnabled, scryfall } from "../../scryfall/client";
 import { buildCard, emptyCardRowFields } from "../../testing/cardFixture";
+import { PRINTINGS_LIMIT } from "./card";
 
 jest.mock("../../scryfall/client", () => ({
   ...jest.requireActual<object>("../../scryfall/client"),
   isScryfallFallbackEnabled: jest.fn(() => false),
-  scryfall: { searchByName: jest.fn() },
+  scryfall: { searchByName: jest.fn(), getRulings: jest.fn() },
 }));
 
 const fallbackEnabled = isScryfallFallbackEnabled as jest.MockedFunction<
@@ -17,6 +18,7 @@ const fallbackEnabled = isScryfallFallbackEnabled as jest.MockedFunction<
 const searchByName = scryfall.searchByName as jest.MockedFunction<
   typeof scryfall.searchByName
 >;
+const getRulings = scryfall.getRulings as jest.MockedFunction<typeof scryfall.getRulings>;
 
 describe("card procedures", () => {
   const callerWithoutSession = () => {
@@ -27,6 +29,132 @@ describe("card procedures", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     fallbackEnabled.mockReturnValue(false);
+  });
+
+  describe("byId", () => {
+    test("returns the card with its other printings", async () => {
+      const card = buildCard({ id: "a", oracle_id: "oracle-1", set: "lea" });
+      const printings = [
+        {
+          id: "b",
+          name: "Black Lotus",
+          set: "leb",
+          set_name: "Limited Edition Beta",
+          collector_number: "233",
+          rarity: "rare",
+          released_at: "1993-10-01",
+          image_uris: null,
+          card_faces: null,
+        },
+      ];
+      prismaMock.card.findUnique.mockResolvedValue(card);
+      prismaMock.card.findMany.mockResolvedValue(printings as never);
+
+      const result = await callerWithoutSession().card.byId({ id: "a" });
+
+      expect(result).toStrictEqual({ ...card, printings, hasMorePrintings: false });
+      expect(prismaMock.card.findUnique).toHaveBeenCalledWith({ where: { id: "a" } });
+    });
+
+    test("asks for other printings of the same oracle card, newest first, list columns only", async () => {
+      prismaMock.card.findUnique.mockResolvedValue(buildCard({ id: "a", oracle_id: "oracle-1" }));
+      prismaMock.card.findMany.mockResolvedValue([]);
+
+      await callerWithoutSession().card.byId({ id: "a" });
+
+      expect(prismaMock.card.findMany).toHaveBeenCalledWith({
+        where: { oracle_id: "oracle-1", id: { not: "a" } },
+        select: {
+          id: true,
+          name: true,
+          set: true,
+          set_name: true,
+          collector_number: true,
+          rarity: true,
+          released_at: true,
+          image_uris: true,
+          card_faces: true,
+        },
+        orderBy: [{ released_at: { sort: "desc", nulls: "last" } }, { id: "asc" }],
+        take: PRINTINGS_LIMIT + 1,
+      });
+    });
+
+    test("caps printings and says there are more", async () => {
+      prismaMock.card.findUnique.mockResolvedValue(buildCard({ id: "a", oracle_id: "oracle-1" }));
+      const many = Array.from({ length: PRINTINGS_LIMIT + 1 }, (_, i) => ({ id: `p${i}` }));
+      prismaMock.card.findMany.mockResolvedValue(many as never);
+
+      const result = await callerWithoutSession().card.byId({ id: "a" });
+
+      expect(result.printings).toHaveLength(PRINTINGS_LIMIT);
+      expect(result.hasMorePrintings).toBe(true);
+    });
+
+    test("skips the printings query for cards without an oracle_id", async () => {
+      const card = buildCard({ id: "a" });
+      prismaMock.card.findUnique.mockResolvedValue(card);
+
+      const result = await callerWithoutSession().card.byId({ id: "a" });
+
+      expect(result).toStrictEqual({ ...card, printings: [], hasMorePrintings: false });
+      expect(prismaMock.card.findMany).not.toHaveBeenCalled();
+    });
+
+    test("throws NOT_FOUND for an unknown id", async () => {
+      prismaMock.card.findUnique.mockResolvedValue(null);
+
+      await expect(callerWithoutSession().card.byId({ id: "missing" })).rejects.toMatchObject({
+        code: "NOT_FOUND",
+      });
+      expect(prismaMock.card.findMany).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("rulings", () => {
+    const id = "bd8fa327-dd41-4737-8f19-2cf5eb1f7cdd";
+    const rulings = [{ source: "wotc", published_at: "2004-10-04", comment: "A ruling." }];
+
+    beforeEach(() => {
+      fallbackEnabled.mockReturnValue(true);
+    });
+
+    test("returns Scryfall's rulings for a valid id", async () => {
+      getRulings.mockResolvedValue({ status: "ok", rulings });
+
+      await expect(callerWithoutSession().card.rulings({ id })).resolves.toStrictEqual(rulings);
+      expect(getRulings).toHaveBeenCalledWith(id);
+    });
+
+    test("returns [] without calling Scryfall for an id that isn't a UUID", async () => {
+      await expect(callerWithoutSession().card.rulings({ id: "../search" })).resolves.toStrictEqual([]);
+      expect(getRulings).not.toHaveBeenCalled();
+    });
+
+    test("returns [] without calling Scryfall when Scryfall calls are turned off", async () => {
+      fallbackEnabled.mockReturnValue(false);
+
+      await expect(callerWithoutSession().card.rulings({ id })).resolves.toStrictEqual([]);
+      expect(getRulings).not.toHaveBeenCalled();
+    });
+
+    test.each([
+      [{ status: "rate_limited" as const }],
+      [{ status: "skipped" as const, reason: "not a Scryfall card id" }],
+      [{ status: "error" as const, message: "Scryfall returned 503" }],
+    ])("returns [] when Scryfall answers %j", async (outcome) => {
+      jest.spyOn(console, "warn").mockImplementation(() => undefined);
+      getRulings.mockResolvedValue(outcome);
+
+      await expect(callerWithoutSession().card.rulings({ id })).resolves.toStrictEqual([]);
+    });
+
+    test("returns [] when the client throws", async () => {
+      jest.spyOn(console, "error").mockImplementation(() => undefined);
+      getRulings.mockRejectedValue(new Error("boom"));
+
+      await expect(callerWithoutSession().card.rulings({ id })).resolves.toStrictEqual([]);
+    });
   });
 
   describe("findMany", () => {
