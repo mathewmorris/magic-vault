@@ -30,6 +30,10 @@ export type ScanCard = Prisma.CardGetPayload<{ select: typeof scanCardSelect }>;
 
 export type ScanMatch = { card: ScanCard; face: number; similarity: number };
 
+export type ScanStatus = { enabled: boolean; modelId: string; indexed: number };
+
+export type ScanMatchResult = { matches: ScanMatch[]; printing: ScanCard | null };
+
 function assertScanEnabled() {
   if (!isFeatureEnabled("aiScan")) {
     throw new TRPCError({ code: "NOT_FOUND", message: "AI scan is turned off" });
@@ -38,7 +42,7 @@ function assertScanEnabled() {
 
 export const scanRouter = createTRPCRouter({
   /** Whether AI scan is on, which model the server expects, and how many card faces it has indexed. */
-  status: publicProcedure.query(async ({ ctx }) => {
+  status: publicProcedure.query(async ({ ctx }): Promise<ScanStatus> => {
     const enabled = isFeatureEnabled("aiScan");
     const indexed = enabled
       ? await ctx.prisma.cardEmbedding.count({ where: { modelId: EMBED_MODEL.id } })
@@ -65,7 +69,7 @@ export const scanRouter = createTRPCRouter({
           .optional(),
       }),
     )
-    .query(async ({ ctx, input }): Promise<{ matches: ScanMatch[]; printing: ScanCard | null }> => {
+    .query(async ({ ctx, input }): Promise<ScanMatchResult> => {
       assertScanEnabled();
       if (input.modelId !== EMBED_MODEL.id) {
         throw new TRPCError({

@@ -1,5 +1,5 @@
 /**
- * In-process Postgres (PGlite + pgvector) with every Prisma migration
+ * In-process Postgres (PGlite + pgvector + pg_trgm) with every Prisma migration
  * applied, for unit tests of raw SQL. Boots in about two seconds, so create
  * one per test file in beforeAll.
  */
@@ -8,6 +8,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 import { PGlite } from "@electric-sql/pglite";
+import { pg_trgm } from "@electric-sql/pglite/contrib/pg_trgm";
 import { vector } from "@electric-sql/pglite-pgvector";
 
 import type { SqlExecutor, SqlTransaction } from "../server/recognition/matchEmbeddings";
@@ -15,7 +16,7 @@ import type { SqlExecutor, SqlTransaction } from "../server/recognition/matchEmb
 const MIGRATIONS_DIR = path.join(__dirname, "..", "..", "prisma", "migrations");
 
 export async function createMigratedDatabase(): Promise<PGlite> {
-  const db = await PGlite.create({ extensions: { vector } });
+  const db = await PGlite.create({ extensions: { vector, pg_trgm } });
   const folders = readdirSync(MIGRATIONS_DIR, { withFileTypes: true })
     .filter((entry) => entry.isDirectory())
     .map((entry) => entry.name)
