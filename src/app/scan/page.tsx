@@ -1,9 +1,9 @@
 "use client";
 
 /**
- * SPIKE: scan a card with the camera and find it.
+ * Scan cards with the camera and add them to a collection.
  *
- * This is a proof of concept, not a finished feature. The flow is:
+ * The flow is:
  *   1. Line the card up with the on-screen guide and press Capture.
  *   2. Crop the frame to the card's title strip (where the guide says it is).
  *   3. OCR that strip with tesseract.js (runs in the browser, in a worker).
@@ -11,23 +11,37 @@
  *      card.search is a "name contains" query, so if the full name misses we
  *      also search on its longest words.
  *   5. Rank everything we found with a fuzzy (Levenshtein) match and show the
- *      top few.
+ *      top few, best guess selected.
+ *   6. Signed in, the user adds the selected card to a collection and scans
+ *      the next one. The camera keeps running the whole time.
  *
  * There's no card detection: if the card isn't inside the guide, the crop
  * misses the title. The pure parts live in ~/utils/scan and are unit tested.
  */
 
-import Image from "next/image";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useSession } from "next-auth/react";
+import Link from "next/link";
+import { useSearchParams } from "next/navigation";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Worker as TesseractWorker } from "tesseract.js";
 import Button from "~/components/Button";
 import CameraFeed from "~/components/CameraFeed";
+import CollectionPicker, { collectionLabel } from "~/components/scan/CollectionPicker";
+import ScanMatches, { type MatchOption } from "~/components/scan/ScanMatches";
+import SessionTally from "~/components/scan/SessionTally";
 import { api, type RouterOutputs } from "~/utils/api";
+import { signInHref } from "~/utils/signInHref";
 import { smallImageUrl } from "~/utils/cardImage";
 import { classifyCameraError, type CameraErrorInfo } from "~/utils/scan/cameraError";
 import { cardGuideRect, titleStripRect, type Rect } from "~/utils/scan/cardGuide";
 import { extractCardName } from "~/utils/scan/cleanOcrText";
 import { rankCandidates, type RankedMatch } from "~/utils/scan/fuzzyMatch";
+import {
+  pickInitialCollection,
+  readLastCollectionId,
+  saveLastCollectionId,
+} from "~/utils/scan/lastCollection";
+import { type AddedCard } from "~/utils/scan/scanSession";
 import { buildSearchTerms } from "~/utils/scan/searchTerms";
 
 type Card = RouterOutputs["card"]["search"]["items"][number];
@@ -112,7 +126,22 @@ function CardGuide({ frame }: { frame: { width: number; height: number } }) {
 }
 
 export default function ScanPage() {
+  // useSearchParams needs a Suspense boundary so the page can still be
+  // prerendered.
+  return (
+    <Suspense fallback={<p className="px-4">Loading scanner...</p>}>
+      <Scanner />
+    </Suspense>
+  );
+}
+
+function Scanner() {
   const utils = api.useUtils();
+  const searchParams = useSearchParams();
+  const requestedCollection = searchParams?.get("collection") ?? null;
+  const { status } = useSession();
+  const auth =
+    status === "authenticated" ? "signed-in" : status === "unauthenticated" ? "signed-out" : "loading";
 
   const [cameraKey, setCameraKey] = useState(0);
   const [cameraError, setCameraError] = useState<CameraErrorInfo | null>(null);
@@ -125,6 +154,44 @@ export default function ScanPage() {
   const [cardName, setCardName] = useState("");
   const [matches, setMatches] = useState<RankedMatch<Card>[]>([]);
   const [errorMessage, setErrorMessage] = useState("");
+  const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
+
+  // Adding to a collection.
+  const collectionsQuery = api.collection.getAll.useQuery(undefined, {
+    enabled: auth === "signed-in",
+  });
+  const collections = useMemo(() => collectionsQuery.data ?? [], [collectionsQuery.data]);
+  const [collectionId, setCollectionId] = useState<string | null>(null);
+  const [added, setAdded] = useState<AddedCard[]>([]);
+  const [addedName, setAddedName] = useState<string | null>(null);
+  const addCard = api.collection.addCard.useMutation();
+  const removeCard = api.collection.removeCard.useMutation();
+  // React Query keeps reset stable across renders, unlike the mutation object.
+  const resetAddCard = addCard.reset;
+  const signInUrl = signInHref(
+    requestedCollection ? `/scan?collection=${encodeURIComponent(requestedCollection)}` : "/scan",
+  );
+
+  // Once the collections load, start with the one from the URL, then the last
+  // one used, then the first. Also covers the current one going away.
+  useEffect(() => {
+    if (!collectionsQuery.data) return;
+    if (collectionId && collections.some((collection) => collection.id === collectionId)) return;
+    setCollectionId(
+      pickInitialCollection(collections, {
+        requested: requestedCollection,
+        remembered: readLastCollectionId(),
+      }),
+    );
+  }, [collectionsQuery.data, collections, collectionId, requestedCollection]);
+
+  const collection = collections.find((entry) => entry.id === collectionId) ?? null;
+  const collectionName = collection ? collectionLabel(collection.name) : null;
+
+  const chooseCollection = (id: string) => {
+    setCollectionId(id);
+    saveLastCollectionId(id);
+  };
 
   // One Tesseract worker for the life of the page. Creating it downloads the
   // English language data the first time, so we do it lazily on first capture.
@@ -183,6 +250,9 @@ export default function ScanPage() {
       setPhase("reading");
       setProgress(0);
       setMatches([]);
+      setSelectedCardId(null);
+      setAddedName(null);
+      resetAddCard();
       setRawText("");
       setCardName("");
       setErrorMessage("");
@@ -203,7 +273,9 @@ export default function ScanPage() {
         }
 
         setPhase("searching");
-        setMatches(await findMatches(name));
+        const ranked = await findMatches(name);
+        setMatches(ranked);
+        setSelectedCardId(ranked[0]?.candidate.id ?? null);
         setPhase("done");
       } catch (error) {
         console.error(error);
@@ -211,8 +283,60 @@ export default function ScanPage() {
         setPhase("error");
       }
     },
-    [getWorker, findMatches],
+    [getWorker, findMatches, resetAddCard],
   );
+
+  const matchOptions: MatchOption[] = matches.map(({ candidate, name, score }) => ({
+    id: candidate.id,
+    name,
+    score,
+    imageUrl: smallImageUrl(candidate),
+  }));
+
+  const handleAdd = () => {
+    const match = matchOptions.find((option) => option.id === selectedCardId);
+    if (!match || !collection) return;
+    const target = { collectionId: collection.id, collectionName: collectionName ?? "" };
+
+    addCard.mutate(
+      { collectionId: target.collectionId, cardId: match.id },
+      {
+        onSuccess: () => {
+          setAdded((list) => [...list, { cardId: match.id, name: match.name, ...target }]);
+          setAddedName(match.name);
+          saveLastCollectionId(target.collectionId);
+          void utils.collection.cards.invalidate({ collectionId: target.collectionId });
+        },
+      },
+    );
+  };
+
+  const handleUndo = () => {
+    const last = added[added.length - 1];
+    if (!last) return;
+    removeCard.mutate(
+      { collectionId: last.collectionId, cardId: last.cardId },
+      {
+        onSuccess: () => {
+          setAdded((list) => list.slice(0, -1));
+          setAddedName(null);
+          void utils.collection.cards.invalidate({ collectionId: last.collectionId });
+        },
+      },
+    );
+  };
+
+  // Clear the last result; the camera stays on, ready for the next card.
+  const scanNext = () => {
+    setPhase("ready");
+    setMatches([]);
+    setSelectedCardId(null);
+    setAddedName(null);
+    setRawText("");
+    setCardName("");
+    setCropPreview(null);
+    addCard.reset();
+  };
 
   const handleCameraError = useCallback((error: unknown) => {
     console.error(error);
@@ -230,11 +354,46 @@ export default function ScanPage() {
   return (
     <div className="flex flex-col gap-6 px-4">
       <div>
-        <h1 className="text-2xl font-semibold">Scan a card</h1>
+        <h1 className="text-2xl font-semibold">Scan cards</h1>
         <p className="text-sm text-gray-400">
-          Experimental. Fit the card inside the outline with its name in the pink box, then capture.
+          Fit the card inside the outline with its name in the pink box, then capture.
         </p>
       </div>
+
+      {auth === "signed-out" && (
+        <p className="text-sm">
+          <Link href={signInUrl} className="font-semibold underline">
+            Sign in
+          </Link>{" "}
+          to add the cards you scan to a collection.
+        </p>
+      )}
+
+      {auth === "signed-in" &&
+        (collectionsQuery.isError ? (
+          <p className="text-sm text-red-400">
+            Couldn&apos;t load your collections.{" "}
+            <button type="button" className="underline" onClick={() => void collectionsQuery.refetch()}>
+              Try again
+            </button>
+          </p>
+        ) : collectionsQuery.data ? (
+          <CollectionPicker
+            collections={collections}
+            value={collectionId}
+            onChange={chooseCollection}
+            disabled={addCard.isLoading}
+          />
+        ) : (
+          <p className="text-sm text-gray-400">Loading your collections...</p>
+        ))}
+
+      <SessionTally added={added} onUndo={handleUndo} undoing={removeCard.isLoading} />
+      {removeCard.error && (
+        <p role="alert" className="text-red-400">
+          Couldn&apos;t undo: {removeCard.error.message}
+        </p>
+      )}
 
       {cameraError ? (
         <div className="flex flex-col items-start gap-3 rounded-lg border border-red-500 p-4">
@@ -273,28 +432,25 @@ export default function ScanPage() {
         </p>
       )}
 
-      {matches.length > 0 && (
-        <section>
-          <h2 className="mb-2 text-xl font-semibold">Best matches for &quot;{cardName}&quot;</h2>
-          <ul className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-5">
-            {matches.map(({ candidate, name, score }) => {
-              const image = smallImageUrl(candidate);
-              return (
-                <li key={candidate.id} className="flex flex-col items-center gap-1 text-center">
-                  {image ? (
-                    <Image src={image} width={146} height={204} alt={name} className="rounded-lg" />
-                  ) : (
-                    <div className="flex h-[204px] w-[146px] items-center justify-center rounded-lg bg-gray-800 text-sm">
-                      No image
-                    </div>
-                  )}
-                  <span className="font-semibold">{name}</span>
-                  <span className="text-xs text-gray-400">{Math.round(score * 100)}% match</span>
-                </li>
-              );
-            })}
-          </ul>
-        </section>
+      {matchOptions.length > 0 && (
+        <ScanMatches
+          query={cardName}
+          matches={matchOptions}
+          selectedId={selectedCardId}
+          onSelect={(id) => {
+            setSelectedCardId(id);
+            setAddedName(null);
+            addCard.reset();
+          }}
+          auth={auth}
+          signInUrl={signInUrl}
+          collectionName={collectionName}
+          onAdd={handleAdd}
+          adding={addCard.isLoading}
+          addedName={addedName}
+          onScanNext={scanNext}
+          error={addCard.error?.message ?? null}
+        />
       )}
 
       {(cropPreview ?? rawText) && (

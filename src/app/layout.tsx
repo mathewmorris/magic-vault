@@ -32,6 +32,7 @@ export default async function RootLayout({
     ? [
         { href: "/", label: "Home" },
         { href: "/collections", label: "My Collections" },
+        { href: "/scan", label: "Scan" },
         { href: "/about", label: "About" },
       ]
     : [
