@@ -3,7 +3,9 @@
 import Image from "next/image";
 import { useParams, useRouter } from "next/navigation";
 import Button from "~/components/Button";
+import { useToast } from "~/components/toast";
 import { api } from "~/utils/api";
+import { collectionLabel, mutationErrorMessage } from "~/utils/toastMessages";
 
 export default function Page() {
   const router = useRouter();
@@ -11,9 +13,38 @@ export default function Page() {
   const id = params?.id ?? "";
   const { data: collection } = api.collection.byId.useQuery({ id });
   const cards = api.card.findMany.useQuery({ cardIds: collection?.cards ?? [] });
-  const { mutate: softDeleteCollection } = api.collection.softDelete.useMutation();
-  const { mutate: recoverCollection } = api.collection.recover.useMutation();
-  const { mutate: destroyCollection } = api.collection.destroy.useMutation();
+  const toast = useToast();
+  // Callbacks live on useMutation (not on mutate) so they still run after
+  // router.back() unmounts this page. The toasts show on the page we land on.
+  const { mutate: softDeleteCollection } =
+    api.collection.softDelete.useMutation({
+      onSuccess: (deleted) => {
+        toast.success(
+          `Deleted ${collectionLabel(deleted.name)}. You can recover it from Deleted Collections.`,
+        );
+      },
+      onError: (error) => {
+        toast.error(mutationErrorMessage("delete this collection", error));
+      },
+    });
+  const { mutate: recoverCollection } = api.collection.recover.useMutation({
+    onSuccess: (recovered) => {
+      toast.success(`Recovered ${collectionLabel(recovered.name)}.`);
+    },
+    onError: (error) => {
+      toast.error(mutationErrorMessage("recover this collection", error));
+    },
+  });
+  const { mutate: destroyCollection } = api.collection.destroy.useMutation({
+    onSuccess: (destroyed) => {
+      toast.success(`Permanently deleted ${collectionLabel(destroyed.name)}.`);
+    },
+    onError: (error) => {
+      toast.error(
+        mutationErrorMessage("permanently delete this collection", error),
+      );
+    },
+  });
 
   function onDeleteClick() {
     if (collection?.id) {
