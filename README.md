@@ -46,3 +46,5 @@ App runs at `http://localhost:3000`. Mailcatcher (magic link emails) at `http://
 |---|---|
 | Push to any branch | Vercel preview deployment |
 | Merge to `main` | Vercel production deployment + migrations run via GitHub Action |
+
+Self-hosted on the homelab (tailnet only, for testing before v1): see [docs/homelab.md](docs/homelab.md).

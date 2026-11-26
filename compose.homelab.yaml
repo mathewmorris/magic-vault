@@ -1,0 +1,53 @@
+# Magic Vault on the homelab (bananajuice), tailnet only. Setup: docs/homelab.md
+#
+#   docker compose -f compose.homelab.yaml up -d --build
+#
+# Ports bind to 127.0.0.1 so only Caddy on the host can reach them.
+# Caddy serves http://magicvault.internal and http://mailpit.internal.
+# Do NOT port-forward any of this to the internet.
+name: magic-vault
+
+services:
+  app: # http://magicvault.internal -> 127.0.0.1:3000
+    build:
+      context: .
+      dockerfile: Dockerfile.homelab
+    image: magic-vault:homelab
+    container_name: magic-vault
+    restart: unless-stopped
+    env_file: .env.homelab
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      db:
+        condition: service_healthy
+      mailpit:
+        condition: service_started
+
+  db: # Postgres for Magic Vault only. Moves to the shared instance once it exists.
+    image: postgres:16-alpine
+    container_name: magic-vault-db
+    restart: unless-stopped
+    env_file: .env.homelab # reads POSTGRES_PASSWORD
+    environment:
+      POSTGRES_USER: magic_vault
+      POSTGRES_DB: magic_vault
+    volumes:
+      - magic-vault-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "magic_vault", "-d", "magic_vault"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  mailpit: # catch-all inbox for sign-in links: http://mailpit.internal -> 127.0.0.1:8025
+    image: axllent/mailpit:v1.20.0
+    container_name: magic-vault-mailpit
+    restart: unless-stopped
+    environment:
+      MP_MAX_MESSAGES: 500
+    ports:
+      - "127.0.0.1:8025:8025"
+
+volumes:
+  magic-vault-pgdata:

@@ -8,6 +8,7 @@ import DiscordProvider from "next-auth/providers/discord";
 import EmailProvider from "next-auth/providers/email";
 import GitHubProvider from "next-auth/providers/github";
 import GoogleProvider from "next-auth/providers/google";
+import { type Provider } from "next-auth/providers/index";
 
 import { env } from "~/env";
 import { prisma } from "~/server/db";
@@ -49,33 +50,63 @@ export const authOptions: NextAuthOptions = {
     }),
   },
   adapter: PrismaAdapter(prisma),
-  providers: [
-    EmailProvider({
-      server: env.EMAIL_SERVER ?? "",
-      from: env.EMAIL_FROM ?? "",
-    }),
-    DiscordProvider({
-      clientId: env.DISCORD_CLIENT_ID ?? "",
-      clientSecret: env.DISCORD_CLIENT_SECRET ?? "",
-      // NextAuth's default Discord button puts the blurple logo from
-      // authjs.dev on a blurple background, so the icon disappears. A white
-      // button with Discord-colored text keeps the logo visible.
-      style: {
-        logo: "/discord.svg",
-        bg: "#fff",
-        text: "#5865F2",
-      },
-    }),
-    GitHubProvider({
-      clientId: env.GITHUB_ID ?? "",
-      clientSecret: env.GITHUB_SECRET ?? ""
-    }),
-    GoogleProvider({
-      clientId: env.GOOGLE_ID ?? "",
-      clientSecret: env.GOOGLE_SECRET ?? ""
-    }),
-  ],
+  providers: buildProviders(),
 };
+
+/**
+ * Only turn on a provider when it has credentials. The homelab deploy signs in
+ * by email alone, and a provider with empty credentials would still show a
+ * sign-in button that can't work.
+ */
+function buildProviders(): Provider[] {
+  const providers: Provider[] = [];
+
+  if (env.EMAIL_SERVER && env.EMAIL_FROM) {
+    providers.push(
+      EmailProvider({
+        server: env.EMAIL_SERVER,
+        from: env.EMAIL_FROM,
+      }),
+    );
+  }
+
+  if (env.DISCORD_CLIENT_ID && env.DISCORD_CLIENT_SECRET) {
+    providers.push(
+      DiscordProvider({
+        clientId: env.DISCORD_CLIENT_ID,
+        clientSecret: env.DISCORD_CLIENT_SECRET,
+        // NextAuth's default Discord button puts the blurple logo from
+        // authjs.dev on a blurple background, so the icon disappears. A white
+        // button with Discord-colored text keeps the logo visible.
+        style: {
+          logo: "/discord.svg",
+          bg: "#fff",
+          text: "#5865F2",
+        },
+      }),
+    );
+  }
+
+  if (env.GITHUB_ID && env.GITHUB_SECRET) {
+    providers.push(
+      GitHubProvider({
+        clientId: env.GITHUB_ID,
+        clientSecret: env.GITHUB_SECRET,
+      }),
+    );
+  }
+
+  if (env.GOOGLE_ID && env.GOOGLE_SECRET) {
+    providers.push(
+      GoogleProvider({
+        clientId: env.GOOGLE_ID,
+        clientSecret: env.GOOGLE_SECRET,
+      }),
+    );
+  }
+
+  return providers;
+}
 
 /**
  * Wrapper for `getServerSession` so that you don't need to import the `authOptions` in every file.

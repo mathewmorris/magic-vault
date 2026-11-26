@@ -18,6 +18,21 @@ const isProdDeploy =
  */
 const prodRequired = (schema) => (isProdDeploy ? schema : schema.optional());
 
+// OAuth apps only exist for the Vercel deploy. A self-hosted production
+// deploy (the homelab, compose.homelab.yaml) signs in by email and only turns
+// on the OAuth providers whose credentials it was given.
+const isVercelProd = process.env.VERCEL_ENV === "production";
+
+/**
+ * Required on the Vercel production deploy, optional everywhere else.
+ *
+ * @template {z.ZodTypeAny} T
+ * @param {T} schema
+ * @returns {T | z.ZodOptional<T>}
+ */
+const vercelProdRequired = (schema) =>
+  isVercelProd ? schema : schema.optional();
+
 export const env = createEnv({
   /**
    * Specify your server-side environment variables schema here. This way you can ensure the app
@@ -34,14 +49,15 @@ export const env = createEnv({
       // VERCEL_URL doesn't include `https` so it cant be validated as a URL
       process.env.VERCEL ? z.string().min(1) : z.string().url()
     ),
-    // OAuth + email creds are required in production but optional in preview/dev
-    // so PR previews don't need real credentials wired up to build.
-    DISCORD_CLIENT_ID: prodRequired(z.string()),
-    DISCORD_CLIENT_SECRET: prodRequired(z.string()),
-    GITHUB_ID: prodRequired(z.string()),
-    GITHUB_SECRET: prodRequired(z.string()),
-    GOOGLE_ID: prodRequired(z.string()),
-    GOOGLE_SECRET: prodRequired(z.string()),
+    // OAuth creds are required on Vercel production only. Email creds are
+    // required on any production deploy, since email is the sign-in that
+    // always works. Both stay optional in preview/dev.
+    DISCORD_CLIENT_ID: vercelProdRequired(z.string()),
+    DISCORD_CLIENT_SECRET: vercelProdRequired(z.string()),
+    GITHUB_ID: vercelProdRequired(z.string()),
+    GITHUB_SECRET: vercelProdRequired(z.string()),
+    GOOGLE_ID: vercelProdRequired(z.string()),
+    GOOGLE_SECRET: vercelProdRequired(z.string()),
     EMAIL_SERVER: prodRequired(z.string()),
     EMAIL_FROM: prodRequired(z.string().email()),
   },
