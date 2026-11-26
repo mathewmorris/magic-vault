@@ -3,3 +3,7 @@ scryfall_downloads/
 events/
 logs/
 
+__pycache__/
+state/
+default_cards.json
+default_cards.json.part
