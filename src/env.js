@@ -52,7 +52,18 @@ export const env = createEnv({
    * `NEXT_PUBLIC_`.
    */
   client: {
-    // NEXT_PUBLIC_CLIENTVAR: z.string().min(1),
+    // Optional donation link (Ko-fi, GitHub Sponsors, etc). When unset, the
+    // "Support Magic Vault" link is hidden. Blank counts as unset.
+    NEXT_PUBLIC_DONATION_URL: z.preprocess(
+      (str) => (str === "" ? undefined : str),
+      z
+        .string()
+        .url()
+        .refine((url) => url.startsWith("https://"), {
+          message: "NEXT_PUBLIC_DONATION_URL must be an https URL",
+        })
+        .optional()
+    ),
   },
 
   /**
@@ -72,6 +83,7 @@ export const env = createEnv({
     GOOGLE_SECRET: process.env.GOOGLE_SECRET,
     EMAIL_SERVER: process.env.EMAIL_SERVER,
     EMAIL_FROM: process.env.EMAIL_FROM,
+    NEXT_PUBLIC_DONATION_URL: process.env.NEXT_PUBLIC_DONATION_URL,
   },
   /**
    * Run `build` or `dev` with `SKIP_ENV_VALIDATION` to skip env validation.
