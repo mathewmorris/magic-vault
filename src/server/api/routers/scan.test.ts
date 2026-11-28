@@ -184,6 +184,123 @@ describe("scan procedures", () => {
       expect(prismaMock.card.findMany).not.toHaveBeenCalled();
     });
 
+    describe("alternates", () => {
+      /** A unit vector along axis `i`, so each variant's SQL call can be told apart. */
+      const axis = (i: number) => {
+        const v = new Array<number>(EMBED_MODEL.dims).fill(0);
+        v[i] = 1;
+        return v;
+      };
+
+      /** Answers the nearest-neighbour query per variant, keyed by the vector's first value. */
+      function answerPerVariant(byAxis: Record<number, unknown[]>, printing: unknown[] = []) {
+        prismaMock.$queryRawUnsafe.mockImplementation(((sql: string, vector?: string) => {
+          if (sql.includes('FROM "CardEmbedding"')) {
+            const values = (vector ?? "").replace(/[[\]]/g, "").split(",").map(Number);
+            return Promise.resolve(byAxis[values.indexOf(1)] ?? []);
+          }
+          if (sql.includes('FROM "Card"')) return Promise.resolve(printing);
+          return Promise.reject(new Error(`unexpected SQL: ${sql}`));
+        }) as unknown as PrismaClient["$queryRawUnsafe"]);
+      }
+
+      test("searches every embedding and returns the matches of the best one, with its index", async () => {
+        answerPerVariant({
+          0: [{ cardId: "a", face: 0, similarity: 0.41 }],
+          1: [
+            { cardId: "b", face: 0, similarity: 0.88 },
+            { cardId: "c", face: 0, similarity: 0.5 },
+          ],
+          2: [{ cardId: "d", face: 0, similarity: 0.6 }],
+        });
+        prismaMock.card.findMany.mockResolvedValue([scanCard("b"), scanCard("c")] as never);
+
+        const result = await caller().scan.match({
+          embedding: axis(0),
+          alternates: [axis(1), axis(2)],
+          modelId: EMBED_MODEL.id,
+        });
+
+        expect(result).toEqual({
+          matches: [
+            { card: scanCard("b"), face: 0, similarity: 0.88 },
+            { card: scanCard("c"), face: 0, similarity: 0.5 },
+          ],
+          printing: null,
+          variant: 1,
+          variantSimilarities: [0.41, 0.88, 0.6],
+        });
+        const searches = prismaMock.$queryRawUnsafe.mock.calls.filter(([sql]) =>
+          String(sql).includes('FROM "CardEmbedding"'),
+        );
+        expect(searches).toHaveLength(3);
+        // Only the winning variant's cards are loaded.
+        expect(prismaMock.card.findMany).toHaveBeenCalledTimes(1);
+        expect(prismaMock.card.findMany).toHaveBeenCalledWith({
+          where: { id: { in: ["b", "c"] } },
+          select: scanCardSelect,
+        });
+      });
+
+      test("keeps the main embedding on a tie or when the alternates find nothing", async () => {
+        answerPerVariant({
+          0: [{ cardId: "a", face: 0, similarity: 0.7 }],
+          1: [{ cardId: "b", face: 0, similarity: 0.7 }],
+          2: [],
+        });
+        prismaMock.card.findMany.mockResolvedValue([scanCard("a")] as never);
+
+        const result = await caller().scan.match({
+          embedding: axis(0),
+          alternates: [axis(1), axis(2)],
+          modelId: EMBED_MODEL.id,
+        });
+
+        expect(result.variant).toBe(0);
+        expect(result.variantSimilarities).toEqual([0.7, 0.7, null]);
+        expect(result.matches.map((m) => m.card.id)).toEqual(["a"]);
+      });
+
+      test("still looks up the printing once, alongside the winner's cards", async () => {
+        answerPerVariant({ 0: [], 1: [{ cardId: "a", face: 0, similarity: 0.8 }] }, [{ id: "p" }]);
+        prismaMock.card.findMany.mockResolvedValue([scanCard("a"), scanCard("p")] as never);
+
+        const result = await caller().scan.match({
+          embedding: axis(0),
+          alternates: [axis(1)],
+          modelId: EMBED_MODEL.id,
+          printing: { set: "M21", collectorNumber: "7" },
+        });
+
+        expect(result.variant).toBe(1);
+        expect(result.printing).toEqual(scanCard("p"));
+        const printingCalls = prismaMock.$queryRawUnsafe.mock.calls.filter(([sql]) =>
+          String(sql).includes('FROM "Card"'),
+        );
+        expect(printingCalls).toHaveLength(1);
+      });
+
+      test("an empty alternates list still reports variant 0", async () => {
+        answerPerVariant({ 0: [{ cardId: "a", face: 0, similarity: 0.6 }] });
+        prismaMock.card.findMany.mockResolvedValue([scanCard("a")] as never);
+
+        const result = await caller().scan.match({ embedding: axis(0), alternates: [], modelId: EMBED_MODEL.id });
+
+        expect(result).toMatchObject({ variant: 0, variantSimilarities: [0.6] });
+      });
+
+      test.each([
+        ["more than 3", { alternates: [axis(1), axis(2), axis(3), axis(4)] }],
+        ["wrong size", { alternates: [[1, 0, 0]] }],
+        ["non-finite", { alternates: [axis(1).map((v, i) => (i === 5 ? NaN : v))] }],
+      ])("rejects bad alternates: %s", async (_label, input) => {
+        await expect(
+          caller().scan.match({ embedding: axis(0), modelId: EMBED_MODEL.id, ...input }),
+        ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+        expect(prismaMock.$queryRawUnsafe).not.toHaveBeenCalled();
+      });
+    });
+
     test("raises ef_search in a transaction for big limits", async () => {
       answerRawQueries({ nearest: [{ cardId: "a", face: 0, similarity: 0.5 }] });
       prismaMock.$executeRawUnsafe.mockResolvedValue(0);
