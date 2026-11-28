@@ -1,11 +1,13 @@
 "use client";
 
 import Link from "next/link";
+import { useMemo } from "react";
 
 import Spinner from "~/components/Spinner";
 import { api } from "~/utils/api";
 import { FORMAT_LABELS, isDeckFormat } from "~/utils/deck/checkDeck";
 import { formatUsd } from "~/utils/price";
+import { usePrefetchCollection } from "~/utils/usePrefetchCollection";
 
 import FeatureIcon from "./FeatureIcon";
 import QuickSearch from "./QuickSearch";
@@ -76,6 +78,11 @@ export default function Dashboard({ name }: { name?: string | null }) {
   const collections = api.collection.getAll.useQuery();
   const values = api.collection.values.useQuery();
   const decks = api.deck.getAll.useQuery();
+  const newestCollections = useMemo(
+    () => (collections.data ? byNewest(collections.data).slice(0, LIST_LIMIT) : undefined),
+    [collections.data],
+  );
+  const prefetchCollection = usePrefetchCollection(newestCollections);
 
   const totalCents = values.data
     ? Object.values(values.data).reduce((sum, value) => sum + value.totalCents, 0)
@@ -124,24 +131,24 @@ export default function Dashboard({ name }: { name?: string | null }) {
             />
           ) : (
             <ul className="divide-y divide-purple-100 dark:divide-purple-900/60">
-              {byNewest(collections.data)
-                .slice(0, LIST_LIMIT)
-                .map((collection) => {
-                  const value = values.data?.[collection.id];
-                  return (
-                    <li key={collection.id}>
-                      <Link
-                        href={`/collection/${collection.id}`}
-                        className="flex items-center justify-between gap-4 py-3 hover:text-pink-600 dark:hover:text-pink-300"
-                      >
-                        <span className="truncate font-medium">{collection.name ?? "My Collection"}</span>
-                        <span className={`shrink-0 text-sm ${mutedText}`}>
-                          {value ? formatUsd(value.totalCents) : "No cards yet"}
-                        </span>
-                      </Link>
-                    </li>
-                  );
-                })}
+              {(newestCollections ?? []).map((collection) => {
+                const value = values.data?.[collection.id];
+                return (
+                  <li key={collection.id}>
+                    <Link
+                      href={`/collection/${collection.id}`}
+                      onPointerEnter={() => prefetchCollection(collection)}
+                      onFocus={() => prefetchCollection(collection)}
+                      className="flex items-center justify-between gap-4 py-3 hover:text-pink-600 dark:hover:text-pink-300"
+                    >
+                      <span className="truncate font-medium">{collection.name ?? "My Collection"}</span>
+                      <span className={`shrink-0 text-sm ${mutedText}`}>
+                        {value ? formatUsd(value.totalCents) : "No cards yet"}
+                      </span>
+                    </Link>
+                  </li>
+                );
+              })}
             </ul>
           )}
         </ListPanel>

@@ -5,6 +5,7 @@ import { type Collection } from "@prisma/client";
 import Spinner from "~/components/Spinner";
 import { api, type RouterOutputs } from "~/utils/api";
 import { formatUsd, unpricedLabel } from "~/utils/price";
+import { usePrefetchCollection } from "~/utils/usePrefetchCollection";
 
 type CollectionValues = RouterOutputs["collection"]["values"];
 
@@ -27,6 +28,8 @@ const CollectionList = ({
   collections: Collection[];
   values: CollectionValues | undefined;
 }) => {
+  const prefetchCollection = usePrefetchCollection(collections);
+
   if (collections.length < 1) {
     return (
       <>
@@ -39,7 +42,13 @@ const CollectionList = ({
     <div key={collection.id} className="flex gap-2">
       <span>{collection.name}</span>
       <ValueLabel value={values?.[collection.id]} />
-      <Link href={`/collection/${collection.id}`}>View Collection</Link>
+      <Link
+        href={`/collection/${collection.id}`}
+        onPointerEnter={() => prefetchCollection(collection)}
+        onFocus={() => prefetchCollection(collection)}
+      >
+        View Collection
+      </Link>
     </div>
   ));
 };
