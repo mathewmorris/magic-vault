@@ -38,9 +38,9 @@ jobs:
       DRY_RUN: ${{ inputs.dry_run }}
       FULL: ${{ inputs.full }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
           cache: pip
@@ -52,7 +52,7 @@ jobs:
       # state/ holds hashes.json (id -> hash of the stored columns) and
       # state.json (bulk updated_at of the last successful sync).
       - name: Restore sync state
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v5
         with:
           path: scryfall-data-broker/state
           key: scryfall-sync-state-${{ github.run_id }}
@@ -90,7 +90,7 @@ jobs:
       # the next run to pick up the same changes.
       - name: Save sync state
         if: success() && steps.check.outputs.changed == 'true' && inputs.dry_run != true
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v5
         with:
           path: scryfall-data-broker/state
           key: scryfall-sync-state-${{ github.run_id }}

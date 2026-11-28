@@ -21,11 +21,11 @@ jobs:
       EMAIL_SERVER: "smtp://localhost:1025"
       EMAIL_FROM: "noreply@magicvault.local"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
 
       - name: Install
@@ -62,11 +62,11 @@ jobs:
       SKIP_ENV_VALIDATION: "true"
       DATABASE_URL: "postgresql://postgres:postgres@localhost:5432/magicvault_test"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
 
       - name: Install
@@ -79,7 +79,7 @@ jobs:
     name: Scryfall broker tests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 2
 
@@ -94,7 +94,7 @@ jobs:
             echo "No broker changes, skipping."
           fi
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         if: steps.changes.outputs.broker == 'true'
         with:
           python-version: "3.12"
