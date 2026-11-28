@@ -17,3 +17,14 @@ export function smallImageUrl(card: CardImageSource): string | null {
   const faces = card.card_faces as { image_uris?: ImageUris }[] | null | undefined;
   return faces?.[0]?.image_uris?.small ?? null;
 }
+
+/**
+ * Normal-size card image URL (488 x 680), with the same front-face fallback
+ * as smallImageUrl.
+ */
+export function normalImageUrl(card: CardImageSource): string | null {
+  const images = card.image_uris as ImageUris;
+  if (images?.normal) return images.normal;
+  const faces = card.card_faces as { image_uris?: ImageUris }[] | null | undefined;
+  return faces?.[0]?.image_uris?.normal ?? null;
+}
