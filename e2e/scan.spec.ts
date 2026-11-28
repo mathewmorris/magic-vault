@@ -42,7 +42,12 @@ function cameraArgs(video: string | undefined): string[] {
 }
 
 /** WebGPU on SwiftShader, so the WebGPU path runs without a real GPU. */
-const WEBGPU_ARGS = ["--enable-unsafe-webgpu", "--enable-unsafe-swiftshader", "--use-webgpu-adapter=swiftshader"];
+const WEBGPU_ARGS = [
+  "--enable-unsafe-webgpu",
+  "--enable-unsafe-swiftshader",
+  "--use-webgpu-adapter=swiftshader",
+  "--enable-dawn-features=allow_unsafe_apis",
+];
 
 function annotate(level: "error" | "warning" | "notice", title: string, lines: string[]) {
   const escape = (text: string) => text.replace(/%/g, "%25").replace(/\r/g, "").replace(/\n/g, "%0A");
@@ -201,11 +206,14 @@ function defineScanTest(user: ScanCase) {
       const gpu = await page.evaluate(async () => {
         const nav = navigator as Navigator & { gpu?: { requestAdapter(): Promise<unknown> } };
         if (!nav.gpu) return "no navigator.gpu";
-        const adapter = await nav.gpu.requestAdapter().catch((e: unknown) => String(e));
-        return adapter ? "WebGPU adapter found" : "no WebGPU adapter";
+        const adapter = (await nav.gpu.requestAdapter().catch(() => null)) as {
+          features: Iterable<string>;
+        } | null;
+        if (!adapter) return "no WebGPU adapter";
+        return `WebGPU adapter found (features: ${[...adapter.features].sort().join(", ") || "none"})`;
       });
       mark(gpu);
-      if (user.webGpu) expect(gpu, "this run needs WebGPU to test the WebGPU path").toBe("WebGPU adapter found");
+      if (user.webGpu) expect(gpu, "this run needs WebGPU to test the WebGPU path").toMatch(/^WebGPU adapter found/);
 
       // Progress while the models load, so a stall shows where it stopped.
       const loading = page.getByRole("status").filter({ hasText: /Loading the card scanner/ });

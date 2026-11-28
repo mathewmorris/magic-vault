@@ -94,6 +94,30 @@ export async function fetchModelBytes(
   return new Uint8Array(await response.arrayBuffer());
 }
 
+type GpuLike = { requestAdapter(): Promise<{ features: { has(name: string): boolean } } | null> };
+
+let webGpuCheck: Promise<boolean> | null = null;
+
+/**
+ * Can this browser's WebGPU run our models? They're float16, so the adapter
+ * needs the "shader-f16" feature. Without it ORT still builds f16 shaders,
+ * WebGPU rejects them as validation errors that never reach `run`, and the
+ * models quietly return nothing (SwiftShader and some older GPUs).
+ */
+export function webGpuCanRunModels(gpu: GpuLike | undefined = navigatorGpu()): Promise<boolean> {
+  if (!gpu) return Promise.resolve(false);
+  webGpuCheck ??= gpu
+    .requestAdapter()
+    .then((adapter) => !!adapter && adapter.features.has("shader-f16"))
+    .catch(() => false);
+  return webGpuCheck;
+}
+
+function navigatorGpu(): GpuLike | undefined {
+  if (typeof navigator === "undefined") return undefined;
+  return (navigator as { gpu?: GpuLike }).gpu ?? undefined;
+}
+
 export function executionProviders(preferWebGpu = true): ("webgpu" | "wasm")[] {
   const hasGpu = typeof navigator !== "undefined" && "gpu" in navigator && !!(navigator as { gpu?: unknown }).gpu;
   return preferWebGpu && hasGpu ? ["webgpu", "wasm"] : ["wasm"];
@@ -105,6 +129,7 @@ let webGpuFailed = false;
 /** For tests. */
 export function resetWebGpuFailure(): void {
   webGpuFailed = false;
+  webGpuCheck = null;
 }
 
 type FallbackSession = {
@@ -164,13 +189,15 @@ export function withWasmFallback<S extends FallbackSession>(gpu: S, makeWasm: ()
 
 /**
  * Create a session for the model at `url`, on WebGPU when the browser has it
+ * and it can run float16 models
  * (falling back to WASM per operator), and on plain WASM if WebGPU fails,
  * whether at setup or on a later run.
  */
 export async function createSession(url: string, opts: { preferWebGpu?: boolean } = {}): Promise<OrtSession> {
   const ort = await loadOrt();
   const bytes = await fetchModelBytes(url);
-  const providers = executionProviders((opts.preferWebGpu ?? true) && !webGpuFailed);
+  const wantGpu = (opts.preferWebGpu ?? true) && !webGpuFailed && (await webGpuCanRunModels());
+  const providers = executionProviders(wantGpu);
   const createWasm = () =>
     ort.InferenceSession.create(bytes.slice(), {
       executionProviders: ["wasm"],
