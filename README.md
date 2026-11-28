@@ -83,6 +83,12 @@ Want to follow along or pitch in? Start with [CONTRIBUTING.md](./CONTRIBUTING.md
 | Push to any branch | Vercel preview deployment |
 | Merge to `main` | Vercel production deployment + migrations run via GitHub Action |
 
+### Signing in on previews
+
+Previews have no OAuth or email credentials, so real sign-in is off there. Instead, **Sign in** on a preview opens `/preview-login`, where you pick one of four test users (new, collector, deckbuilder, vintage) and land on their dashboard. Each test user and their collections and decks are created the first time they're picked, on whatever database the preview uses (the Neon `preview` branch).
+
+The page and its API (`/api/preview-login`) only exist when `VERCEL_ENV` is `preview`. Production, local dev, local production builds and the homelab all get a 404, and only the four fixed test accounts in `src/server/previewLogin/testUsers.ts` can be signed in this way.
+
 Self-hosted on the homelab (tailnet only, for testing before v1): see [docs/homelab.md](docs/homelab.md).
 
 AI card recognition (server side: embedding index, scan API, daily indexer): see [docs/card-recognition.md](docs/card-recognition.md).

@@ -5,6 +5,11 @@ import { render, screen } from "@testing-library/react";
 
 import Landing from "./Landing";
 
+jest.mock("next/navigation", () => ({
+  useRouter: () => ({ push: jest.fn() }),
+  usePathname: () => "/",
+}));
+
 const bolt = { id: "bolt", name: "Lightning Bolt", imageUrl: "https://cards.scryfall.io/normal/bolt.jpg" };
 
 describe("Landing", () => {
