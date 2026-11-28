@@ -79,8 +79,6 @@ describe("collection router (integration)", () => {
           scryfall_uri: `https://scryfall.com/card/${id}`,
           image_status: "highres_scan",
           layout: "normal",
-          // The old column is ignored now.
-          prices: { usd: "999.00" },
         })),
       });
       await prisma.cardPrice.create({ data: { cardId: "lotus", prices: { usd: "10.00", usd_foil: "25.00" } } });

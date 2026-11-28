@@ -31,7 +31,6 @@ PRICE_TABLE = '"CardPrice"'
 PRICE_FIELD = "prices"
 
 # Columns the Card table stores (see prisma/schema.prisma), besides "id".
-# "Card"."prices" still exists for one release but is no longer written.
 STORED_FIELDS = (
     "name",
     "scryfall_uri",

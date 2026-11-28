@@ -70,7 +70,7 @@ describe("collection card procedures", () => {
 
     describe("cards", () => {
         test("puts each card's prices from CardPrice on the card", async () => {
-            const lotus = buildCard({ id: "lotus", prices: { usd: "1.00" } });
+            const lotus = buildCard({ id: "lotus" });
             prismaMock.cardsOnCollections.findMany.mockResolvedValue([buildEntry({ cardId: "lotus" })]);
             prismaMock.card.findMany.mockResolvedValue([
                 { ...lotus, price: { prices: { usd: "10.00" } } },
@@ -78,7 +78,6 @@ describe("collection card procedures", () => {
 
             const [entry] = await authedCaller().collection.cards({ collectionId });
 
-            // The old "Card"."prices" column is ignored.
             expect(entry?.card).toStrictEqual({ ...lotus, prices: { usd: "10.00" } });
             expect(entry?.card).not.toHaveProperty("price");
             expect(prismaMock.card.findMany).toHaveBeenCalledWith({
@@ -104,9 +103,9 @@ describe("collection card procedures", () => {
             await expect(
                 authedCaller().collection.cards({ collectionId })
             ).resolves.toStrictEqual([
-                { card: mox, finish: "nonfoil", condition: "NM", language: "en", count: 2, buyLinks: buyLinks(mox) },
-                { card: lotus, finish: "nonfoil", condition: "LP", language: "ja", count: 1, buyLinks: buyLinks(lotus) },
-                { card: mox, finish: "foil", condition: "NM", language: "en", count: 1, buyLinks: buyLinks(mox) },
+                { card: { ...mox, prices: null }, finish: "nonfoil", condition: "NM", language: "en", count: 2, buyLinks: buyLinks(mox) },
+                { card: { ...lotus, prices: null }, finish: "nonfoil", condition: "LP", language: "ja", count: 1, buyLinks: buyLinks(lotus) },
+                { card: { ...mox, prices: null }, finish: "foil", condition: "NM", language: "en", count: 1, buyLinks: buyLinks(mox) },
             ]);
         });
 
@@ -132,7 +131,7 @@ describe("collection card procedures", () => {
 
             await expect(
                 authedCaller().collection.cards({ collectionId })
-            ).resolves.toStrictEqual([{ card: lotus, finish: "nonfoil", condition: "NM", language: "en", count: 1, buyLinks: buyLinks(lotus) }]);
+            ).resolves.toStrictEqual([{ card: { ...lotus, prices: null }, finish: "nonfoil", condition: "NM", language: "en", count: 1, buyLinks: buyLinks(lotus) }]);
         });
 
         test("throws FORBIDDEN for someone else's collection", async () => {
