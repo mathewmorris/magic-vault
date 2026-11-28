@@ -21,7 +21,9 @@ function pick(userId: string) {
   return new Request("https://magic-vault-git-x-magicians.vercel.app/api/preview-login", { method: "POST", body });
 }
 
-beforeEach(() => mockReset(prismaMock));
+beforeEach(() => {
+  mockReset(prismaMock);
+});
 
 function setEnv(key: "VERCEL_ENV" | "NODE_ENV", value: string | undefined) {
   if (value === undefined) delete env[key];
