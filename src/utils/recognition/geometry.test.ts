@@ -5,11 +5,14 @@ import {
   homography,
   isConvexQuad,
   isPlausibleCardQuad,
+  isSideways,
   orderCorners,
   quadArea,
   quadStability,
   rectToQuad,
   rotate180,
+  rotateImage,
+  scaleQuad,
   sharpness,
   warpQuad,
   type Point,
@@ -320,6 +323,66 @@ describe("rotate180", () => {
   });
 });
 
+describe("rotateImage", () => {
+  // 3 wide, 2 tall; each pixel's red is its index, so moves are easy to read.
+  const image = makeImage(3, 2, (x, y) => [x + y * 3, 0, 0]);
+  const reds = (img: RgbaImage) => {
+    const rows: number[][] = [];
+    for (let y = 0; y < img.height; y++) {
+      const row: number[] = [];
+      for (let x = 0; x < img.width; x++) row.push(pixel(img, x, y)[0]!);
+      rows.push(row);
+    }
+    return rows;
+  };
+
+  it("leaves 0 alone and matches rotate180 at 180", () => {
+    expect(rotateImage(image, 0)).toBe(image);
+    expect(Array.from(rotateImage(image, 180).data)).toEqual(Array.from(rotate180(image).data));
+  });
+
+  it("turns clockwise at 90 and counter-clockwise at 270, swapping the size", () => {
+    // [0 1 2]
+    // [3 4 5]
+    const cw = rotateImage(image, 90);
+    expect([cw.width, cw.height]).toEqual([2, 3]);
+    expect(reds(cw)).toEqual([
+      [3, 0],
+      [4, 1],
+      [5, 2],
+    ]);
+    const ccw = rotateImage(image, 270);
+    expect([ccw.width, ccw.height]).toEqual([2, 3]);
+    expect(reds(ccw)).toEqual([
+      [2, 5],
+      [1, 4],
+      [0, 3],
+    ]);
+  });
+
+  it("composes: 90 then 270 is the original, 90 twice is 180", () => {
+    expect(Array.from(rotateImage(rotateImage(image, 90), 270).data)).toEqual(Array.from(image.data));
+    expect(Array.from(rotateImage(rotateImage(image, 90), 90).data)).toEqual(Array.from(rotate180(image).data));
+  });
+});
+
+describe("isSideways", () => {
+  it.each([0, 20, -20, 180, 160])("is false for a portrait card at %d degrees", (degrees) => {
+    expect(isSideways(orderCorners(cardQuad(400, 400, 150, degrees)))).toBe(false);
+  });
+
+  it.each([90, 70, 110, -90, 270])("is true for a card lying sideways at %d degrees", (degrees) => {
+    expect(isSideways(orderCorners(cardQuad(400, 400, 150, degrees)))).toBe(true);
+  });
+
+  it("doesn't depend on orderCorners having turned the quad", () => {
+    const landscape = rectToQuad({ x: 100, y: 100, width: 280, height: 200 });
+    expect(isSideways(landscape)).toBe(true);
+    expect(isSideways(orderCorners(landscape))).toBe(true);
+    expect(isSideways(rectToQuad({ x: 100, y: 100, width: 200, height: 280 }))).toBe(false);
+  });
+});
+
 describe("sharpness", () => {
   it("is zero for a flat image and higher for sharper edges", () => {
     const flat = makeImage(20, 20, () => [100, 100, 100]);
@@ -351,5 +414,18 @@ describe("quadStability", () => {
 describe("quadArea", () => {
   it("computes the area of a rectangle", () => {
     expect(quadArea(rectToQuad({ x: 1, y: 2, width: 3, height: 4 }))).toBe(12);
+  });
+});
+
+describe("scaleQuad", () => {
+  it("grows a quad about its centroid, keeping the corner order", () => {
+    const quad = rectToQuad({ x: 10, y: 20, width: 100, height: 140 });
+    expect(scaleQuad(quad, 1.5)).toEqual([
+      { x: -15, y: -15 },
+      { x: 135, y: -15 },
+      { x: 135, y: 195 },
+      { x: -15, y: 195 },
+    ]);
+    expect(scaleQuad(quad, 1)).toEqual(quad);
   });
 });

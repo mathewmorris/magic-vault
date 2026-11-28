@@ -39,6 +39,14 @@ describe("parseCollectorInfo", () => {
     ])("%j", (text, expected) => expectInfo(text, expected));
   });
 
+  describe("marks stuck to the front of the number", () => {
+    test.each<[string, Expected]>([
+      // Real reads from the browser check, Lightning Bolt CLB 187.
+      ["P187/361 C\nCLBENIRINANORDSOL\n", { collectorNumber: "187", total: "361", rarity: "C" }],
+      ["$187/361 C\nCLB « EN w [RINA NORDSOL\n", { collectorNumber: "187", total: "361", setCode: "clb" }],
+    ])("%j", (text, expected) => expectInfo(text, expected));
+  });
+
   describe("languages", () => {
     test.each<[string, string]>([
       ["STX • ES", "es"],
@@ -82,6 +90,48 @@ describe("parseCollectorInfo", () => {
 
     test("everything read lower case", () => {
       expectInfo("0157/280 r\nm21 • en", { setCode: "m21", lang: "en", rarity: "R" });
+    });
+  });
+
+  describe("the foil mark (star on foils, dot on non-foils)", () => {
+    test.each<[string]>([["M21 ★ EN"], ["M21★EN"], ["M21 ☆ EN"], ["M21 ★EN"], ["M21 ★"]])(
+      "a star is foil: %j",
+      (line) => expectInfo(`0157/280 R\n${line}`, { setCode: "m21", foilMark: "foil" }),
+    );
+
+    test("a star on a 2023+ card still reads the set and language", () => {
+      expectInfo("R 0157\nMKM ★ EN", { setCode: "mkm", lang: "en", collectorNumber: "157", foilMark: "foil" });
+    });
+
+    test.each<[string]>([["M21 • EN"], ["M21•EN"], ["M21 · EN"], ["M21 ● EN"], ["M21.EN"], ["M21 •"]])(
+      "a dot is non-foil: %j",
+      (line) => expectInfo(`0157/280 R\n${line}`, { setCode: "m21", foilMark: "nonfoil" }),
+    );
+
+    // "*" is how both the dot and a blurry star come out, so it says nothing.
+    test.each<[string]>([
+      ["M21 * EN"],
+      ["M21 ** EN"],
+      ["M21 - EN"],
+      ["M21 + EN"],
+      ["M21 e EN"],
+      ["M21eEN"],
+      ["M21 o EN"],
+      ["M21 °EN"],
+      ["M21 EN"],
+      ["M21EN"],
+      ["M21 ★• EN"],
+    ])("anything else is unknown: %j", (line) =>
+      expectInfo(`0157/280 R\n${line}`, { setCode: "m21", foilMark: null }),
+    );
+
+    test("a star suffix on the collector number is not the foil mark", () => {
+      expectInfo("7★ R\nPM21 • EN", { collectorNumber: "7★", foilMark: "nonfoil" });
+      expectInfo("7★ R", { collectorNumber: "7★", foilMark: null });
+    });
+
+    test("no set line, no foil mark", () => {
+      expectInfo("0157/280 R", { foilMark: null });
     });
   });
 
@@ -148,6 +198,7 @@ describe("parseCollectorInfo", () => {
         lang: null,
         rarity: "R",
         total: "280",
+        foilMark: null,
       });
     });
 
@@ -158,11 +209,17 @@ describe("parseCollectorInfo", () => {
         lang: "en",
         rarity: null,
         total: null,
+        foilMark: "nonfoil",
       });
     });
 
     test("set with a bullet but no language", () => {
-      expectInfo("0157/280 R\nM21 •", { setCode: "m21", lang: null, collectorNumber: "157" });
+      expectInfo("0157/280 R\nM21 •", {
+        setCode: "m21",
+        lang: null,
+        collectorNumber: "157",
+        foilMark: "nonfoil",
+      });
     });
 
     test("number without rarity", () => {

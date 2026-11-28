@@ -27,6 +27,9 @@ const bolt: ScryfallCard = {
   legalities: { modern: "legal", standard: "not_legal" },
   finishes: ["nonfoil"],
   lang: "en",
+  border_color: "white",
+  frame: "1993",
+  illustration_id: "bolt-art",
   prices: { usd: "450.00", usd_foil: null, eur: null },
   purchase_uris: { tcgplayer: "https://www.tcgplayer.com/product/1" },
 };
@@ -63,8 +66,35 @@ describe("toCardRow", () => {
       legalities: { modern: "legal", standard: "not_legal" },
       finishes: ["nonfoil"],
       lang: "en",
+      border_color: "white",
+      frame: "1993",
+      frame_effects: [],
+      promo_types: [],
+      security_stamp: null,
+      illustration_id: "bolt-art",
       purchase_uris: { tcgplayer: "https://www.tcgplayer.com/product/1" },
     });
+  });
+
+  test("copies frame effects and promo types, and stores missing ones as empty lists", () => {
+    const showcase = toCardRow({
+      ...bolt,
+      border_color: "borderless",
+      frame: "2015",
+      frame_effects: ["showcase", "legendary"],
+      promo_types: ["boosterfun"],
+      security_stamp: "oval",
+    });
+    expect(showcase).toMatchObject({
+      border_color: "borderless",
+      frame: "2015",
+      frame_effects: ["showcase", "legendary"],
+      promo_types: ["boosterfun"],
+      security_stamp: "oval",
+    });
+    const plain = toCardRow({ ...bolt, frame_effects: undefined, promo_types: null });
+    expect(plain.frame_effects).toEqual([]);
+    expect(plain.promo_types).toEqual([]);
   });
 
   test("leaves prices out, since they live in CardPrice", () => {

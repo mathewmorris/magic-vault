@@ -63,3 +63,10 @@ If the cache is evicted, the next run sends every card, which is safe and
 only rewrites rows that changed.
 `db_updater.py` and the DeepDiff differ above still work for one-off diffs.
 
+Adding a column to `STORED_FIELDS` changes every card's hash, so the next
+run sends every card and rewrites each row once to fill the new column
+(that's how `border_color`, `frame`, `frame_effects`, `promo_types`,
+`security_stamp` and `illustration_id` get filled in). `frame_effects` and
+`promo_types` are Postgres `text[]` (`ARRAY_FIELDS`); Scryfall leaves them out
+when empty, and they're stored as empty lists.
+

@@ -30,11 +30,12 @@ describe("CollectionPicker", () => {
     expect(onChange).toHaveBeenCalledWith("binder");
   });
 
-  test("points to creating a collection when there are none", () => {
+  test("says scans go into a new collection when there are none", () => {
     render(<CollectionPicker collections={[]} value={null} onChange={jest.fn()} />);
 
     expect(screen.queryByRole("combobox")).toBeNull();
-    expect(screen.getByRole("link", { name: "Create one" }).getAttribute("href")).toBe(
+    expect(screen.getByText(/go into a new collection called My collection/)).toBeTruthy();
+    expect(screen.getByRole("link", { name: "make a different one" }).getAttribute("href")).toBe(
       "/collection/create",
     );
   });

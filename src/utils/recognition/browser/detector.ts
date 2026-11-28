@@ -2,7 +2,8 @@
  * Find the card's 4 corners in a camera frame.
  *
  * Tries, in order: the corner model (DETRPose, ONNX) if it's configured and
- * loads; then OpenCV edge/contour search. Each one that fails to load is
+ * loads, with its corners snapped to the card's edges (../refineQuad.ts);
+ * then OpenCV edge/contour search. Each one that fails to load is
  * logged once and skipped, so the detector always works with whatever's
  * left. When nothing finds a card, callers fall back to `guideDetection`,
  * the on-screen guide rectangle.
@@ -13,6 +14,7 @@ import type { RgbaImage } from "../preprocess";
 import { rectToQuad, type Point, type Quad } from "../geometry";
 import { decodePoseOutputs } from "../poseDecode";
 import { pickCardQuad, rotatedRectPoints, type ContourCandidate } from "../contourPick";
+import { refineQuad } from "../refineQuad";
 import { cardGuideRect } from "../../scan/cardGuide";
 import { createSession, loadOrt, type Ort, type OrtSession } from "./ort";
 import {
@@ -198,23 +200,26 @@ export async function createCardDetector(
   const poseSpec = options.pose === undefined ? POSE_MODEL : options.pose;
   const useOpenCv = options.useOpenCv ?? true;
 
-  const [pose, cv] = await Promise.all([
+  const [pose, opencv] = await Promise.all([
     poseSpec
       ? createPoseRunner(poseSpec).catch((error: unknown) => {
           warnOnce("pose-load", "Card corner model didn't load; using OpenCV only.", error);
           return null;
         })
       : Promise.resolve(null),
+    // Keep OpenCV in its wrapper until we're out of the promise chain: the
+    // module has its own `then`, so resolving a promise with it re-resolves
+    // forever and freezes the tab (see ./opencv.ts).
     useOpenCv
       ? import("./opencv")
           .then((mod) => mod.loadOpenCv())
-          .then((wrapped) => wrapped.cv)
           .catch((error: unknown) => {
             warnOnce("opencv-load", "OpenCV didn't load; card edge detection is off.", error);
             return null;
           })
       : Promise.resolve(null),
   ]);
+  const cv = opencv?.cv ?? null;
 
   const kinds: ("pose" | "opencv")[] = [];
   if (pose) kinds.push("pose");
@@ -228,7 +233,8 @@ export async function createCardDetector(
       if (pose) {
         try {
           const found = await pose.run(frame);
-          if (found) return found;
+          // The model's corners can be several percent off; snap them to the card's edges.
+          if (found) return { ...found, quad: refineQuad(frame, found.quad) };
         } catch (error) {
           warnOnce("pose-run", "Card corner model failed on a frame.", error);
         }

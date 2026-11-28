@@ -342,6 +342,36 @@ class ExecuteOperationsTest(unittest.TestCase):
         self.assertIn('"set" = EXCLUDED."set"', apply_diff.insert_sql())
         self.assertIn("%s::jsonb", apply_diff.insert_sql())
 
+    def test_insert_params_carry_printing_look_fields(self):
+        card = fake_card("Bear", border_color="borderless", frame="2015",
+                         frame_effects=["showcase"], promo_types=["boosterfun"],
+                         security_stamp="oval", illustration_id="art-1")
+        op = Operation(INSERT, "x", apply_diff.card_to_row("x", card))
+        by_column = dict(zip(("id",) + apply_diff.STORED_FIELDS,
+                             apply_diff.insert_params(op)))
+        self.assertEqual(by_column["border_color"], "borderless")
+        self.assertEqual(by_column["frame"], "2015")
+        self.assertEqual(by_column["frame_effects"], ["showcase"])
+        self.assertEqual(by_column["promo_types"], ["boosterfun"])
+        self.assertEqual(by_column["security_stamp"], "oval")
+        self.assertEqual(by_column["illustration_id"], "art-1")
+        self.assertIn('"frame_effects" = EXCLUDED."frame_effects"',
+                      apply_diff.insert_sql())
+        self.assertIn("%s::text[]", apply_diff.insert_sql())
+
+    def test_missing_frame_effects_and_promo_types_are_empty_lists(self):
+        # Scryfall leaves both out when a card has none.
+        row = apply_diff.card_to_row("x", fake_card("Bear"))
+        self.assertEqual(row["frame_effects"], [])
+        self.assertEqual(row["promo_types"], [])
+        self.assertIsNone(row["border_color"])
+        op = Operation(UPDATE, "x", {"frame_effects": None})
+        self.assertEqual(
+            apply_diff.update_params(op, ("frame_effects",)), ([], "x"))
+        self.assertEqual(apply_diff.update_sql(("frame_effects",)),
+                         'UPDATE "Card" SET "frame_effects" = %s::text[] '
+                         'WHERE "id" = %s')
+
     def test_insert_params_serialize_json_and_keep_nulls(self):
         params = apply_diff.insert_params(insert_op("x"))
         columns = ("id",) + apply_diff.STORED_FIELDS

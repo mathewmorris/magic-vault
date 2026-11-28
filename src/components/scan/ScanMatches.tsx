@@ -81,6 +81,8 @@ export default function ScanMatches({
                     src={match.imageUrl}
                     width={146}
                     height={204}
+                    // Scryfall already serves this size; skip the optimizer round trip.
+                    unoptimized
                     alt={match.name}
                     className="rounded-lg"
                   />

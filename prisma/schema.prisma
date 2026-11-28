@@ -46,8 +46,21 @@ model Card {
   finishes         Json?   @db.JsonB
   lang             String?
 
+  // How the printing looks, for telling printings of one card apart (the AI
+  // scanner's colour cues, src/utils/recognition/colourCues.ts). Scryfall
+  // leaves frame_effects and promo_types out when there are none, so those
+  // two are stored as empty lists rather than null.
+  border_color     String?
+  frame            String?
+  frame_effects    String[] @default([])
+  promo_types      String[] @default([])
+  security_stamp   String?
+  // Top level only: cards whose faces have their own art keep theirs in card_faces.
+  illustration_id  String?
+
   // Prices live in CardPrice, so a nightly price move doesn't rewrite the
   // whole Card row.
+
   // Scryfall's purchase_uris. Refreshed by the daily sync.
   purchase_uris    Json?   @db.JsonB
   price            CardPrice?

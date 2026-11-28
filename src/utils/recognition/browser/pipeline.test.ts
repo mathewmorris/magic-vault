@@ -4,7 +4,7 @@ import { CARD_HEIGHT, CARD_WIDTH } from "../model";
 import type { RgbaImage } from "../preprocess";
 import { rectToQuad, type Quad } from "../geometry";
 import type { CardDetector, Detection } from "./detector";
-import { captureCard } from "./pipeline";
+import { LOOSE_SCALE, captureCard } from "./pipeline";
 
 const FW = 320;
 const FH = 240;
@@ -87,5 +87,17 @@ describe("captureCard", () => {
     expect(capture!.detection.source).toBe("guide");
     expect(capture!.cards).toHaveLength(2);
     expect(capture!.best).toBe(capture!.cards[1]);
+  });
+
+  it("adds a loose crop with some margin past the detected corners", async () => {
+    const capture = await captureCard([frame(false)], fakeDetector([det()]));
+    const { best, loose } = capture!;
+    expect(loose.width).toBe(Math.round(CARD_WIDTH * LOOSE_SCALE));
+    expect(loose.height).toBe(Math.round(CARD_HEIGHT * LOOSE_SCALE));
+    const pixel = (image: RgbaImage, x: number, y: number) => image.data[(y * image.width + x) * 4];
+    // The tight crop's corner is the card; the loose one's is the table around it.
+    expect(pixel(best, 2, 2)).toBe(128);
+    expect(pixel(loose, 2, 2)).toBe(30);
+    expect(pixel(loose, loose.width >> 1, loose.height >> 1)).toBe(128);
   });
 });

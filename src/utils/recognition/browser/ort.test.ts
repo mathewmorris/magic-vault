@@ -2,7 +2,7 @@ import { describe, expect, it, jest } from "@jest/globals";
 import { readFileSync } from "fs";
 import path from "path";
 
-import { MODEL_CACHE_NAME, ORT_VERSION, ORT_WASM_PATHS, fetchModelBytes } from "./ort";
+import { MODEL_CACHE_NAME, ORT_VERSION, ORT_WASM_PATHS, fetchModelBytes, resetWebGpuFailure, webGpuCanRunModels, withWasmFallback } from "./ort";
 import { fitSize } from "./frame";
 
 describe("ORT_VERSION", () => {
@@ -89,5 +89,104 @@ describe("fitSize", () => {
     expect(fitSize(1920, 1080, 1280)).toEqual({ width: 1280, height: 720 });
     expect(fitSize(1080, 1920, 1280)).toEqual({ width: 720, height: 1280 });
     expect(fitSize(640, 480, 1280)).toEqual({ width: 640, height: 480 });
+  });
+});
+
+describe("withWasmFallback", () => {
+  type Fake = {
+    inputNames: string[];
+    run: (feeds: Record<string, number>) => Promise<string>;
+    release: () => Promise<void>;
+  };
+  function fake(name: string, fail = false) {
+    const released = { done: false };
+    const session: Fake = {
+      inputNames: [`${name}-in`],
+      run: jest.fn((feeds: Record<string, number>) =>
+        fail
+          ? Promise.reject(new Error("[WebGPU] Kernel failed: scale and zero-point inputs must have the same rank"))
+          : Promise.resolve(`${name}:${feeds.x}`),
+      ),
+      release: jest.fn(() => {
+        released.done = true;
+        return Promise.resolve();
+      }),
+    };
+    return { session, released };
+  }
+
+  it("runs on WebGPU while it works", async () => {
+    const gpu = fake("gpu");
+    const makeWasm = jest.fn(() => Promise.resolve(fake("wasm").session));
+    const wrapped = withWasmFallback(gpu.session, makeWasm);
+    await expect(wrapped.run({ x: 1 })).resolves.toBe("gpu:1");
+    expect(makeWasm).not.toHaveBeenCalled();
+    expect(wrapped.inputNames).toEqual(["gpu-in"]);
+  });
+
+  it("rebuilds on WASM and reruns the same inputs when a WebGPU run fails", async () => {
+    const warn = jest.spyOn(console, "warn").mockImplementation(() => undefined);
+    const gpu = fake("gpu", true);
+    const wasm = fake("wasm");
+    const makeWasm = jest.fn(() => Promise.resolve(wasm.session));
+    const wrapped = withWasmFallback(gpu.session, makeWasm);
+
+    await expect(wrapped.run({ x: 2 })).resolves.toBe("wasm:2");
+    await expect(wrapped.run({ x: 3 })).resolves.toBe("wasm:3");
+
+    expect(makeWasm).toHaveBeenCalledTimes(1);
+    expect(gpu.session.run).toHaveBeenCalledTimes(1);
+    expect(gpu.released.done).toBe(true);
+    expect(wrapped.inputNames).toEqual(["wasm-in"]);
+    expect(warn).toHaveBeenCalledTimes(1);
+    warn.mockRestore();
+  });
+
+  it("builds WASM once when two runs fail together", async () => {
+    const warn = jest.spyOn(console, "warn").mockImplementation(() => undefined);
+    const makeWasm = jest.fn(() => Promise.resolve(fake("wasm").session));
+    const wrapped = withWasmFallback(fake("gpu", true).session, makeWasm);
+    const results = await Promise.all([wrapped.run({ x: 1 }), wrapped.run({ x: 2 })]);
+    expect(results).toEqual(["wasm:1", "wasm:2"]);
+    expect(makeWasm).toHaveBeenCalledTimes(1);
+    warn.mockRestore();
+  });
+
+  it("surfaces a WASM failure instead of looping", async () => {
+    const warn = jest.spyOn(console, "warn").mockImplementation(() => undefined);
+    const wrapped = withWasmFallback(fake("gpu", true).session, () => Promise.resolve(fake("wasm", true).session));
+    await expect(wrapped.run({ x: 1 })).rejects.toThrow("same rank");
+    warn.mockRestore();
+  });
+
+  it("releases whichever session is current", async () => {
+    const gpu = fake("gpu");
+    const wrapped = withWasmFallback(gpu.session, () => Promise.resolve(fake("wasm").session));
+    await wrapped.release();
+    expect(gpu.released.done).toBe(true);
+  });
+});
+
+describe("webGpuCanRunModels", () => {
+  const gpu = (features: string[] | null) => ({
+    requestAdapter: () => Promise.resolve(features ? { features: new Set(features) } : null),
+  });
+
+  it("needs an adapter with shader-f16, since the models are float16", async () => {
+    resetWebGpuFailure();
+    await expect(webGpuCanRunModels(gpu(["shader-f16"]))).resolves.toBe(true);
+    resetWebGpuFailure();
+    await expect(webGpuCanRunModels(gpu([]))).resolves.toBe(false);
+    resetWebGpuFailure();
+    await expect(webGpuCanRunModels(gpu(null))).resolves.toBe(false);
+    resetWebGpuFailure();
+    await expect(webGpuCanRunModels(undefined)).resolves.toBe(false);
+  });
+
+  it("treats a failed adapter request as no WebGPU", async () => {
+    resetWebGpuFailure();
+    await expect(webGpuCanRunModels({ requestAdapter: () => Promise.reject(new Error("blocked")) })).resolves.toBe(
+      false,
+    );
   });
 });

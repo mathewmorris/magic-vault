@@ -45,6 +45,45 @@ describe("CARD_REGIONS", () => {
     expect(collector.y + collector.height).toBeGreaterThanOrEqual(655);
   });
 
+  test("the border strips sit inside the printed border and clear of the corners", () => {
+    // The border is about 22 px on every side at 488x680, the frame starts
+    // at about 18 px, and the rounded corners reach about 23 px in.
+    const strips = [
+      regionRect(CARD_REGIONS.borderTop, CARD_WIDTH, CARD_HEIGHT),
+      regionRect(CARD_REGIONS.borderBottom, CARD_WIDTH, CARD_HEIGHT),
+      regionRect(CARD_REGIONS.borderLeft, CARD_WIDTH, CARD_HEIGHT),
+      regionRect(CARD_REGIONS.borderRight, CARD_WIDTH, CARD_HEIGHT),
+    ];
+    const [top, bottom, left, right] = strips;
+    expect(top!.y).toBeGreaterThanOrEqual(3);
+    expect(top!.y + top!.height).toBeLessThanOrEqual(17);
+    expect(bottom!.y).toBeGreaterThanOrEqual(CARD_HEIGHT - 17);
+    expect(bottom!.y + bottom!.height).toBeLessThanOrEqual(CARD_HEIGHT - 3);
+    expect(left!.x).toBeGreaterThanOrEqual(3);
+    expect(left!.x + left!.width).toBeLessThanOrEqual(17);
+    expect(right!.x).toBeGreaterThanOrEqual(CARD_WIDTH - 17);
+    expect(right!.x + right!.width).toBeLessThanOrEqual(CARD_WIDTH - 3);
+    for (const strip of [top!, bottom!]) {
+      expect(strip.x).toBeGreaterThan(23);
+      expect(strip.x + strip.width).toBeLessThan(CARD_WIDTH - 23);
+    }
+    for (const strip of [left!, right!]) {
+      expect(strip.y).toBeGreaterThan(23);
+      expect(strip.y + strip.height).toBeLessThan(CARD_HEIGHT - 23);
+    }
+  });
+
+  test("the set symbol rect covers the right end of the M15 type line", () => {
+    // Where the symbol prints at 488x680, about x=419..445, y=382..404,
+    // from the M15 frame's proportions (not yet checked on Scryfall images).
+    const symbol = regionRect(CARD_REGIONS.setSymbol, CARD_WIDTH, CARD_HEIGHT);
+    expect(symbol.x).toBeLessThanOrEqual(405);
+    expect(symbol.x + symbol.width).toBeGreaterThanOrEqual(455);
+    expect(symbol.y).toBeLessThanOrEqual(372);
+    expect(symbol.y + symbol.height).toBeGreaterThanOrEqual(414);
+    expect(symbol.x).toBeGreaterThan(CARD_WIDTH * 0.75);
+  });
+
   test("the old frame title rect is at least as big as the modern one", () => {
     const modern = CARD_REGIONS.title;
     const old = CARD_REGIONS.titleOldFrame;

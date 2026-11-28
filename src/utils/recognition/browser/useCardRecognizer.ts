@@ -14,9 +14,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "~/utils/api";
 import type { ScanMatchResult } from "~/server/api/routers/scan";
-import { rankRecognition, type RecognitionResult } from "../fuse";
+import type { RecognitionResult } from "../fuse";
 import { EMBED_MODEL, POSE_MODEL } from "../model";
 import { createCardOcr, type CardOcr, type CardOcrResult } from "../ocr";
+import { recognizeOriented, type Orientation } from "../orientation";
+import { rotateImage } from "../geometry";
 import type { RgbaImage } from "../preprocess";
 import { createCardDetector, type CardDetector, type Detection } from "./detector";
 import { createEmbedder, embedBurst, type Embedder } from "./embedder";
@@ -24,7 +26,12 @@ import { captureCard, type CardCapture } from "./pipeline";
 
 export type LoadState =
   | { status: "idle" }
-  | { status: "loading"; progress: number }
+  | {
+      status: "loading";
+      progress: number;
+      /** What hasn't finished yet, in plain words, so a stall shows where it is. */
+      waitingOn: string[];
+    }
   | { status: "ready"; ocr: boolean; detectorKinds: ("pose" | "opencv")[] }
   | { status: "failed"; error: string };
 
@@ -33,6 +40,15 @@ export type RecognitionOutcome = {
   ocr: CardOcrResult | null;
   server: ScanMatchResult | null;
   result: RecognitionResult | null;
+  /**
+   * Clockwise quarter turns applied to the flattened crop (capture.best) to
+   * get the result, null with no capture. See ../orientation.ts.
+   */
+  orientation: Orientation | null;
+  /** Every orientation embedded for this scan, upright first. */
+  orientationsTried: Orientation[];
+  /** capture.best turned to `orientation`: what OCR read. */
+  orientedCard: RgbaImage | null;
 };
 
 type Engine = { detector: CardDetector; embedder: Embedder; ocr: CardOcr | null };
@@ -59,7 +75,12 @@ export function useCardRecognizer() {
     const parts = { detector: 0, embedder: 0, ocr: 0 };
     const report = () => {
       if (stale()) return;
-      setState({ status: "loading", progress: (parts.detector + parts.embedder + parts.ocr) / 3 });
+      const waitingOn = [
+        parts.detector < 1 ? "card finder" : null,
+        parts.embedder < 1 ? "card matcher" : null,
+        parts.ocr < 1 ? "text reader" : null,
+      ].filter((part): part is string => part !== null);
+      setState({ status: "loading", progress: (parts.detector + parts.embedder + parts.ocr) / 3, waitingOn });
     };
     report();
 
@@ -148,7 +169,11 @@ export function useCardRecognizer() {
     return engine.detector.detect(frame);
   }, []);
 
-  /** Burst of frames -> flat card -> embedding + OCR -> server match -> ranking. */
+  /**
+   * Burst of frames -> flat card -> embedding + OCR -> server match ->
+   * ranking, turning the card round first when upright doesn't match well
+   * (see ../orientation.ts).
+   */
   const recognize = useCallback(
     async (frames: RgbaImage[], options: { allowGuideFallback: boolean }): Promise<RecognitionOutcome> => {
       const engine = engineRef.current;
@@ -157,36 +182,50 @@ export function useCardRecognizer() {
       const capture = await captureCard(frames, engine.detector, {
         allowGuideFallback: options.allowGuideFallback,
       });
-      if (!capture) return { capture: null, ocr: null, server: null, result: null };
+      if (!capture) {
+        return {
+          capture: null,
+          ocr: null,
+          server: null,
+          result: null,
+          orientation: null,
+          orientationsTried: [],
+          orientedCard: null,
+        };
+      }
 
-      const [embedding, ocr] = await Promise.all([
-        embedBurst(engine.embedder, capture.cards),
-        engine.ocr
-          ? engine.ocr.read(capture.best).catch((error: unknown) => {
-              console.error("OCR failed for this card", error);
-              return null;
-            })
-          : Promise.resolve(null),
-      ]);
-
-      const collector = ocr?.collector ?? null;
-      const server = await utils.scan.match.fetch({
-        embedding,
-        modelId: EMBED_MODEL.id,
-        limit: MATCH_LIMIT,
-        printing:
-          collector?.setCode && collector?.collectorNumber
-            ? { set: collector.setCode, collectorNumber: collector.collectorNumber }
-            : undefined,
-      });
-
-      const result = rankRecognition({
-        matches: server.matches,
-        printing: server.printing,
-        ocrName: ocr?.name ?? null,
-        collector,
-      });
-      return { capture, ocr, server, result };
+      const ocr = engine.ocr;
+      const oriented = await recognizeOriented(
+        { cards: capture.cards, best: capture.best, quad: capture.detection.quad },
+        {
+          embedBurst: (cards) => embedBurst(engine.embedder, cards),
+          embed: (card) => engine.embedder.embed(card),
+          ocr: (card, orientation) =>
+            ocr
+              ? ocr.read(card, rotateImage(capture.loose, orientation)).catch((error: unknown) => {
+                  console.error("OCR failed for this card", error);
+                  return null;
+                })
+              : Promise.resolve(null),
+          match: ({ embedding, alternates, printing }) =>
+            utils.scan.match.fetch({
+              embedding,
+              ...(alternates ? { alternates } : {}),
+              modelId: EMBED_MODEL.id,
+              limit: MATCH_LIMIT,
+              printing,
+            }),
+        },
+      );
+      return {
+        capture,
+        ocr: oriented.ocr,
+        server: oriented.server,
+        result: oriented.result,
+        orientation: oriented.orientation,
+        orientationsTried: oriented.orientationsTried,
+        orientedCard: oriented.card,
+      };
     },
     [utils],
   );

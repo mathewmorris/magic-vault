@@ -7,7 +7,9 @@
  * same card isn't captured over and over while it sits there. It re-arms when
  * the card leaves (the detector loses it for a couple of ticks in a row), or
  * when the outline jumps far enough that it must be a different card put down
- * in the same spot.
+ * in the same spot. `rearmedBy` says which of those it was, so the scanner
+ * can tell a card nudged in place (a jump, same card) from the next copy of
+ * the same card put down after the first was taken away.
  */
 
 import type { Point, Quad } from "./geometry";
@@ -37,6 +39,14 @@ export type TrackerUpdate = {
   fire: boolean;
 };
 
+/**
+ * Why the tracker is armed: "start" (never fired yet), "left" (the card was
+ * gone for missesToRearm ticks), "swap" (the outline jumped by swapDistance),
+ * "manual" (arm() was called, e.g. Rescan) or "retry" (arm("retry"), another
+ * look at the same card).
+ */
+export type RearmReason = "start" | "left" | "swap" | "manual" | "retry";
+
 export function scaleQuad(quad: Quad, scale: number): Quad {
   return quad.map((point) => ({ x: point.x * scale, y: point.y * scale })) as Quad;
 }
@@ -61,6 +71,7 @@ export class AutoCaptureTracker {
   private stableSince: number | null = null;
   /** Where the outline was when we last captured, to spot a card swap. */
   private capturedAt: Quad | null = null;
+  private reason: RearmReason = "start";
 
   constructor(options: Partial<TrackerOptions> = {}) {
     this.options = { ...DEFAULT_TRACKER_OPTIONS, ...options };
@@ -68,6 +79,11 @@ export class AutoCaptureTracker {
 
   get isArmed(): boolean {
     return this.armed;
+  }
+
+  /** Why the tracker was last armed; read it when it fires. */
+  get rearmedBy(): RearmReason {
+    return this.reason;
   }
 
   /** Feed one tick of the detection loop. */
@@ -81,6 +97,7 @@ export class AutoCaptureTracker {
       if (this.misses >= missesToRearm) {
         this.armed = true;
         this.capturedAt = null;
+        this.reason = "left";
       }
       return { locked: false, fire: false };
     }
@@ -97,6 +114,7 @@ export class AutoCaptureTracker {
     ) {
       this.armed = true;
       this.capturedAt = null;
+      this.reason = "swap";
     }
 
     const locked = now - this.stableSince >= stableMs;
@@ -111,9 +129,13 @@ export class AutoCaptureTracker {
     this.capturedAt = this.last;
   }
 
-  /** Allow the next auto capture, e.g. when the user asks to scan the next card. */
-  arm(): void {
+  /**
+   * Allow the next auto capture: "manual" when the user asks for it (Rescan),
+   * "retry" for another look at the card still in view.
+   */
+  arm(reason: "manual" | "retry" = "manual"): void {
     this.armed = true;
     this.capturedAt = null;
+    this.reason = reason;
   }
 }

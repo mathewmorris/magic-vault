@@ -12,9 +12,16 @@ export default {
           from: { opacity: '0', transform: 'translateY(0.5rem)' },
           to: { opacity: '1', transform: 'translateY(0)' },
         },
+        // The AI scanner's green flash when it locks onto a card.
+        'scan-lock': {
+          '0%': { opacity: '0' },
+          '20%': { opacity: '1' },
+          '100%': { opacity: '0' },
+        },
       },
       animation: {
         'toast-in': 'toast-in 150ms ease-out',
+        'scan-lock': 'scan-lock 700ms ease-out forwards',
       },
       container: {
         padding: {

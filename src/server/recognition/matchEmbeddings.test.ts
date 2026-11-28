@@ -32,12 +32,12 @@ let exec: SqlExecutor;
 
 async function addCard(
   id: string,
-  fields: { set?: string; collector_number?: string; lang?: string } = {},
+  fields: { set?: string; collector_number?: string; lang?: string; name?: string } = {},
 ) {
   await db.query(
     `INSERT INTO "Card" (id, name, scryfall_uri, image_status, layout, "set", collector_number, lang)
-     VALUES ($1, $1, 'https://scryfall.test', 'highres_scan', 'normal', $2, $3, $4)`,
-    [id, fields.set ?? null, fields.collector_number ?? null, fields.lang ?? null],
+     VALUES ($1, $5, 'https://scryfall.test', 'highres_scan', 'normal', $2, $3, $4)`,
+    [id, fields.set ?? null, fields.collector_number ?? null, fields.lang ?? null, fields.name ?? id],
   );
 }
 
@@ -57,6 +57,9 @@ beforeAll(async () => {
   await addCard("c", { set: "znr", collector_number: "12a", lang: "en" });
   await addCard("d-ja", { set: "war", collector_number: "1", lang: "ja" });
   await addCard("d-en", { set: "war", collector_number: "1", lang: "en" });
+  await addCard("bolt", { set: "clb", collector_number: "187", lang: "en", name: "Lightning Bolt" });
+  await addCard("clb-87", { set: "clb", collector_number: "87", lang: "en", name: "Some Other Card" });
+  await addCard("dfc", { set: "mid", collector_number: "51", lang: "en", name: "Delver of Secrets // Insectile Aberration" });
 
   await addEmbedding("a", 0, unit(0));
   // A double-faced card: both faces sit near axis 1, face 1 closest.
@@ -199,6 +202,31 @@ describe("findPrinting", () => {
 
   it("prefers the English printing", async () => {
     await expect(findPrinting(exec, { set: "war", collectorNumber: "001" })).resolves.toEqual({ id: "d-en" });
+  });
+
+  it("prefers the card in the set with the name read over a clipped number", async () => {
+    // OCR read "87" off "187": the exact number is another card.
+    await expect(
+      findPrinting(exec, { set: "clb", collectorNumber: "87", name: "Lightning Bolt" }),
+    ).resolves.toEqual({ id: "bolt" });
+    await expect(
+      findPrinting(exec, { set: "CLB", collectorNumber: "87", name: " lightning bolt " }),
+    ).resolves.toEqual({ id: "bolt" });
+  });
+
+  it("finds a double-faced card by its front face's name", async () => {
+    await expect(
+      findPrinting(exec, { set: "mid", collectorNumber: "5", name: "Delver of Secrets" }),
+    ).resolves.toEqual({ id: "dfc" });
+  });
+
+  it("falls back to the exact number when no card in the set has the name", async () => {
+    await expect(findPrinting(exec, { set: "clb", collectorNumber: "87", name: "Lightnin Bot" })).resolves.toEqual({
+      id: "clb-87",
+    });
+    await expect(findPrinting(exec, { set: "clb", collectorNumber: "87", name: null })).resolves.toEqual({
+      id: "clb-87",
+    });
   });
 
   it("returns null for unknown or empty input without a query", async () => {

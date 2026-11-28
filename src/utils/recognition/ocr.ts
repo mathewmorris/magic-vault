@@ -13,7 +13,7 @@
 import type { Worker as TesseractWorker } from "tesseract.js";
 import { extractCardName } from "~/utils/scan/cleanOcrText";
 import { rgbaToCanvas } from "./browser/frame";
-import { CARD_REGIONS, regionRect, type CardRegion } from "./cardRegions";
+import { CARD_REGIONS, LOOSE_REGIONS, regionRect, type CardRegion } from "./cardRegions";
 import { isEmptyCollectorInfo, parseCollectorInfo, type CollectorInfo } from "./collectorLine";
 import type { RgbaImage } from "./preprocess";
 
@@ -86,7 +86,13 @@ export function interpretOcr(rawTitle: string, rawCollector: string): CardOcrRes
 }
 
 export type CardOcr = {
-  read(card: RgbaImage): Promise<CardOcrResult>;
+  /**
+   * Read the name and collector info off a flattened card. `loose` is the
+   * same card warped with some margin (CardCapture.loose, turned the same
+   * way); when the tight read misses the name or the collector info, the
+   * wider bands of `loose` are read for whatever's missing.
+   */
+  read(card: RgbaImage, loose?: RgbaImage): Promise<CardOcrResult>;
   terminate(): Promise<void>;
 };
 
@@ -135,7 +141,7 @@ export async function createCardOcr(onProgress?: (progress: number) => void): Pr
   };
 
   return {
-    read: (card) =>
+    read: (card, loose) =>
       enqueue(async () => {
         const source = rgbaToCanvas(card);
         const plan = (region: CardRegion) => planCrop(region, card.width, card.height);
@@ -150,11 +156,38 @@ export async function createCardOcr(onProgress?: (progress: number) => void): Pr
           );
           if (extractCardName(oldFrame)) rawTitle = oldFrame;
         }
-        const rawCollector = await recognize(
+        let rawCollector = await recognize(
           cropForOcr(source, plan(CARD_REGIONS.collector)),
           PSM.SINGLE_BLOCK,
           COLLECTOR_WHITELIST,
         );
+
+        // A corner a little inside the real one cuts text off the tight crop.
+        // Read the wider bands of the loose crop for whatever's still missing.
+        if (loose) {
+          const tight = interpretOcr(rawTitle, rawCollector);
+          if (!tight.name || !tight.collector) {
+            const looseSource = rgbaToCanvas(loose);
+            const loosePlan = (region: CardRegion) => planCrop(region, loose.width, loose.height);
+            if (!tight.name) {
+              // Sparse text: the band holds the name and a strip of art.
+              const looseTitle = await recognize(
+                cropForOcr(looseSource, loosePlan(LOOSE_REGIONS.title)),
+                PSM.SPARSE_TEXT,
+                "",
+              );
+              if (extractCardName(looseTitle)) rawTitle = looseTitle;
+            }
+            if (!tight.collector) {
+              const looseCollector = await recognize(
+                cropForOcr(looseSource, loosePlan(LOOSE_REGIONS.collector)),
+                PSM.SINGLE_BLOCK,
+                COLLECTOR_WHITELIST,
+              );
+              if (!isEmptyCollectorInfo(parseCollectorInfo(looseCollector))) rawCollector = looseCollector;
+            }
+          }
+        }
         return interpretOcr(rawTitle, rawCollector);
       }),
     terminate: async () => {

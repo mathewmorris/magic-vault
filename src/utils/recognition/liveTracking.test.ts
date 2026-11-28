@@ -91,4 +91,25 @@ describe("AutoCaptureTracker", () => {
     tracker.arm();
     expect(tracker.update(quadAt(100, 100), W, H, 300).fire).toBe(true);
   });
+
+  test("says why it re-armed: the card left, the outline jumped, or arm() was called", () => {
+    const tracker = new AutoCaptureTracker({ stableMs: 100, missesToRearm: 2, swapDistance: 0.15 });
+    expect(tracker.rearmedBy).toBe("start");
+
+    tracker.update(quadAt(100, 100), W, H, 0);
+    tracker.update(quadAt(100, 100), W, H, 100); // fires
+    tracker.update(quadAt(300, 120), W, H, 200);
+    expect(tracker.rearmedBy).toBe("swap");
+
+    tracker.update(quadAt(300, 120), W, H, 300); // fires
+    tracker.update(null, W, H, 400);
+    tracker.update(null, W, H, 500);
+    expect(tracker.rearmedBy).toBe("left");
+
+    tracker.disarm();
+    tracker.arm("retry");
+    expect(tracker.rearmedBy).toBe("retry");
+    tracker.arm();
+    expect(tracker.rearmedBy).toBe("manual");
+  });
 });

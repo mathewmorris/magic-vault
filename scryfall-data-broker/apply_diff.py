@@ -60,6 +60,12 @@ STORED_FIELDS = (
     "legalities",
     "finishes",
     "lang",
+    "border_color",
+    "frame",
+    "frame_effects",
+    "promo_types",
+    "security_stamp",
+    "illustration_id",
     "purchase_uris",
 )
 # Every Scryfall field this module writes somewhere.
@@ -76,6 +82,12 @@ JSON_FIELDS = (
     "finishes",
     "prices",
     "purchase_uris",
+)
+# text[] columns. Scryfall leaves these out when they're empty; they're
+# stored as empty lists (the column default) rather than null.
+ARRAY_FIELDS = (
+    "frame_effects",
+    "promo_types",
 )
 
 # Report types whose entries carry the new value, and where to find it.
@@ -143,6 +155,9 @@ def card_to_row(card_id: str, card: Dict[str, Any]) -> Dict[str, Any]:
     row = {"id": card_id}
     for name in STORED_FIELDS:
         row[name] = card.get(name)
+    for name in ARRAY_FIELDS:
+        if row[name] is None:
+            row[name] = []
     return row
 
 
@@ -309,12 +324,19 @@ def _quote(column: str) -> str:
 
 
 def _placeholder(column: str) -> str:
-    return "%s::jsonb" if column in JSON_FIELDS else "%s"
+    if column in JSON_FIELDS:
+        return "%s::jsonb"
+    if column in ARRAY_FIELDS:
+        return "%s::text[]"
+    return "%s"
 
 
 def _param(column: str, value: Any) -> Any:
     if column in JSON_FIELDS and value is not None:
         return json.dumps(value)
+    if column in ARRAY_FIELDS:
+        # psycopg and psycopg2 both send a Python list as a Postgres array.
+        return list(value) if value is not None else []
     return value
 
 

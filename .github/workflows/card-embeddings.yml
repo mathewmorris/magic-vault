@@ -23,6 +23,13 @@ on:
         description: "Dry run: count what needs embedding, write nothing"
         type: boolean
         default: false
+      target:
+        description: "Which database to index. preview is the Neon preview branch PR previews use (needs the PREVIEW_DATABASE_URL secret) and runs even while AI_SCAN_INDEX_ENABLED is off."
+        type: choice
+        options:
+          - production
+          - preview
+        default: production
 
 concurrency:
   group: card-embeddings
@@ -34,18 +41,25 @@ permissions:
 jobs:
   embed:
     name: Embed card images
-    if: vars.AI_SCAN_INDEX_ENABLED == 'true'
+    if: vars.AI_SCAN_INDEX_ENABLED == 'true' || inputs.target == 'preview'
     runs-on: ubuntu-latest
     environment: production
     timeout-minutes: 300
     env:
-      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      # A preview run never falls back to production: with no preview secret it gets "missing" and stops.
+      DATABASE_URL: ${{ inputs.target == 'preview' && (secrets.PREVIEW_DATABASE_URL || 'missing') || secrets.DATABASE_URL }}
       SKIP_ENV_VALIDATION: "true"
       # Empty on scheduled runs, so those use the defaults below.
       LIMIT: ${{ inputs.limit }}
       CALIBRATE: ${{ inputs.calibrate }}
       DRY_RUN: ${{ inputs.dry_run }}
     steps:
+      - name: Check the preview secret
+        if: inputs.target == 'preview' && env.DATABASE_URL == 'missing'
+        run: |
+          echo "Add the PREVIEW_DATABASE_URL secret (the Neon preview branch's connection string) to run with target preview."
+          exit 1
+
       - uses: actions/checkout@v5
 
       - uses: actions/setup-node@v5

@@ -15,6 +15,13 @@
  *
  * setCode and lang come back in Scryfall's lowercase form ("m21", "en", "ja")
  * so they can be compared to card rows directly.
+ *
+ * Foil mark: on 2015+ cards the glyph between set code and language is a
+ * star on foils ("M21 ★ EN") and a dot on non-foils ("M21 • EN"). OCR
+ * mangles both, and the dot's most common misread, "*", is also what a
+ * badly read star turns into, so foilMark is conservative: "foil" only for a
+ * real star glyph (★ ☆), "nonfoil" only for a real dot (• · ∙ ● or "."),
+ * and null for everything else ("*", "+", "-", a letter, no separator).
  */
 
 export type Rarity = "C" | "U" | "R" | "M" | "S" | "T" | "L";
@@ -29,7 +36,15 @@ export type CollectorInfo = {
   rarity: Rarity | null;
   /** The set size after the slash on 2015-2022 cards, e.g. "280". */
   total: string | null;
+  /**
+   * What the separator between set code and language says about the finish:
+   * a star is printed on foils, a dot on non-foils. Null when it didn't read
+   * clearly as either (see the header).
+   */
+  foilMark: FoilMark | null;
 };
+
+export type FoilMark = "foil" | "nonfoil";
 
 /** Printed language code -> Scryfall's code. Cards print JP, CS and CT. */
 const LANGUAGES: Record<string, string> = {
@@ -59,9 +74,26 @@ const LANG_PATTERN = Object.keys(LANGUAGES)
   .map((code) => [...code].map((ch) => `[${ch}${ch.toLowerCase()}]`).join(""))
   .join("|");
 
-// What the "•" between set and language comes out as.
+// What the "•" (or the foil "★") between set and language comes out as.
 const SEPARATOR =
-  "(?:\\s*[•·∙●◦○°*+\\-–—.,:;~=_\"'`^»«]{1,2}\\s*|\\s+[eEoO]\\s+|[eo]|\\s+)?";
+  "(?:\\s*[•·∙●◦○°★☆*+\\-–—.,:;~=_\"'`^»«]{1,2}\\s*|\\s+[eEoO]\\s+|[eo]|\\s+)?";
+
+/** Glyphs that can only be the foil star. Not "*": the dot reads as "*" too. */
+const STAR_GLYPHS = new Set(["★", "☆"]);
+/** Glyphs that can only be the non-foil dot. */
+const DOT_GLYPHS = new Set(["•", "·", "∙", "●", "."]);
+
+/**
+ * Read the separator between set code and language: "foil" when every
+ * glyph in it is a star, "nonfoil" when every glyph is a dot, else null.
+ */
+export function readFoilMark(separator: string): FoilMark | null {
+  const glyphs = [...separator.replace(/\s+/g, "")];
+  if (glyphs.length === 0) return null;
+  if (glyphs.every((glyph) => STAR_GLYPHS.has(glyph))) return "foil";
+  if (glyphs.every((glyph) => DOT_GLYPHS.has(glyph))) return "nonfoil";
+  return null;
+}
 
 /**
  * Set code, separator, language. The set code is upper case and digits only,
@@ -69,7 +101,7 @@ const SEPARATOR =
  */
 function setLangRegex(strictEnd: boolean): RegExp {
   return new RegExp(
-    `(^|[^A-Za-z0-9])([A-Z0-9]{3,5})${SEPARATOR}(${LANG_PATTERN})${strictEnd ? "(?![A-Za-z])" : ""}`,
+    `(^|[^A-Za-z0-9])([A-Z0-9]{3,5})(${SEPARATOR})(${LANG_PATTERN})${strictEnd ? "(?![A-Za-z])" : ""}`,
     "g",
   );
 }
@@ -79,7 +111,7 @@ function isPlausibleSetCode(code: string): boolean {
   return /[A-Z]/.test(code);
 }
 
-type SetLang = { setCode: string; lang: string; start: number; end: number };
+type SetLang = { setCode: string; lang: string; separator: string; start: number; end: number };
 
 function findSetLang(text: string): SetLang | null {
   const attempts = [
@@ -92,12 +124,13 @@ function findSetLang(text: string): SetLang | null {
     for (const match of source.matchAll(setLangRegex(strict))) {
       const prefix = match[1] ?? "";
       const code = match[2]!;
-      const lang = match[3]!.toUpperCase();
+      const lang = match[4]!.toUpperCase();
       if (!isPlausibleSetCode(code)) continue;
       const start = (match.index ?? 0) + prefix.length;
       return {
         setCode: code.toLowerCase(),
         lang: LANGUAGES[lang]!,
+        separator: match[3] ?? "",
         start,
         end: (match.index ?? 0) + match[0].length,
       };
@@ -108,12 +141,18 @@ function findSetLang(text: string): SetLang | null {
 
 /** A set code on its own, when the language didn't read: "M21 •" or "M21 * E". */
 function findBareSetCode(text: string): SetLang | null {
-  const re = /(^|[^A-Za-z0-9])([A-Z0-9]{3,5})\s*[•·∙●*+.\-]/g;
+  const re = /(^|[^A-Za-z0-9])([A-Z0-9]{3,5})\s*([•·∙●★☆*+.\-])/g;
   for (const match of text.matchAll(re)) {
     const code = match[2]!;
     if (!isPlausibleSetCode(code)) continue;
     const start = (match.index ?? 0) + (match[1] ?? "").length;
-    return { setCode: code.toLowerCase(), lang: "", start, end: start + code.length };
+    return {
+      setCode: code.toLowerCase(),
+      lang: "",
+      separator: match[3] ?? "",
+      start,
+      end: start + code.length,
+    };
   }
   return null;
 }
@@ -224,6 +263,7 @@ const EMPTY: CollectorInfo = {
   lang: null,
   rarity: null,
   total: null,
+  foilMark: null,
 };
 
 /** True when nothing at all was read. */
@@ -242,6 +282,7 @@ export function parseCollectorInfo(text: string): CollectorInfo {
   if (setLang) {
     result.setCode = setLang.setCode;
     result.lang = setLang.lang || null;
+    result.foilMark = readFoilMark(setLang.separator);
     rest =
       text.slice(0, setLang.start) + " ".repeat(setLang.end - setLang.start) + text.slice(setLang.end);
   }
@@ -266,7 +307,13 @@ export function parseCollectorInfo(text: string): CollectorInfo {
 
     const glued = splitGluedRarity(token);
     const numberText = glued ? glued.rest : token;
-    const number = readNumber(numberText);
+    let number = readNumber(numberText);
+    // Right before the slash, a mark or two stuck to the front is the set
+    // symbol or the frame read as letters: "P187 / 361", "$187 / 361".
+    if (!number && tokens[i + 1]?.text === "/") {
+      const trimmed = /^[^0-9]{1,2}([0-9].*)$/.exec(numberText);
+      if (trimmed) number = readNumber(trimmed[1]!);
+    }
     if (!number) continue;
 
     // "0157 / 280": this is the number and the next one is the total.
