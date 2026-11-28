@@ -353,6 +353,8 @@ function LockBanner({
           src={option.imageUrl}
           width={56}
           height={78}
+          // Scryfall already serves small sizes; skip the optimizer round trip.
+          unoptimized
           alt=""
           className="hidden shrink-0 rounded sm:block"
         />
