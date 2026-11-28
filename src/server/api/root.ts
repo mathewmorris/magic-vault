@@ -4,6 +4,7 @@ import { collectionRouter } from "~/server/api/routers/collection";
 import { cardRouter } from "~/server/api/routers/card";
 import { deckRouter } from "~/server/api/routers/deck";
 import { scanRouter } from "~/server/api/routers/scan";
+import { achievementRouter } from "~/server/api/routers/achievement";
 
 /**
  * This is the primary router for your server.
@@ -15,6 +16,7 @@ export const appRouter = createTRPCRouter({
   card: cardRouter,
   deck: deckRouter,
   scan: scanRouter,
+  achievement: achievementRouter,
 });
 
 // export type definition of API

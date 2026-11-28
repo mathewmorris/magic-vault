@@ -36,11 +36,13 @@ export default async function RootLayout({
         { href: "/decks", label: "My Decks" },
         { href: "/scan", label: "Scan" },
         { href: "/about", label: "About" },
+        { href: "/settings", label: "Settings" },
       ]
     : [
         { href: "/", label: "Home" },
         { href: "/search", label: "Search" },
         { href: "/about", label: "About" },
+        { href: "/settings", label: "Settings" },
       ];
 
   return (
