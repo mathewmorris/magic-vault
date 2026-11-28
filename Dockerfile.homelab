@@ -1,6 +1,6 @@
 # Production image for the homelab (bananajuice). See docs/homelab.md.
 # The plain Dockerfile next to this one is the local dev setup (npm run dev).
-FROM node:18.20.4-alpine
+FROM node:24-alpine
 
 # Prisma's engines need OpenSSL on Alpine.
 RUN apk add --no-cache openssl
