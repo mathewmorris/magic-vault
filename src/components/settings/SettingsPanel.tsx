@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useSession } from "next-auth/react";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { mutedText, panel } from "~/components/home/styles";
 import { useToast } from "~/components/toast";
@@ -27,6 +27,11 @@ export default function SettingsPanel() {
   const toast = useToast();
   const utils = api.useUtils();
   const [tapOn, setTapOn] = useCardTap();
+  // Earned while signed out and kept in this browser until they sign in.
+  const [pending, setPending] = useState<string[]>([]);
+  useEffect(() => {
+    setPending(pendingAchievements());
+  }, []);
 
   const earned = api.achievement.list.useQuery(undefined, { enabled: signedIn });
   const unlock = api.achievement.unlock.useMutation({
@@ -58,6 +63,7 @@ export default function SettingsPanel() {
       unlock.mutate({ key: "untap-step" });
     } else {
       addPendingAchievement("untap-step");
+      setPending(pendingAchievements());
       toast.success("Achievement unlocked: Untap Step. Sign in to keep it.");
     }
   };
@@ -66,7 +72,7 @@ export default function SettingsPanel() {
     <div className="mx-auto max-w-2xl space-y-10">
       <header className="space-y-2">
         <h1 className="text-4xl font-bold">Settings</h1>
-        <p className={mutedText}>These are saved in this browser.</p>
+        <p className={mutedText}>Card tap is saved in this browser. Achievements are saved to your account.</p>
       </header>
 
       <section aria-labelledby="tap-heading" className={`flex items-start justify-between gap-6 ${panel}`}>
@@ -113,16 +119,26 @@ export default function SettingsPanel() {
         <ul className="space-y-3">
           {ACHIEVEMENTS.map((achievement) => {
             const date = earnedAt.get(achievement.key);
+            const earnedHere = !date && !signedIn && pending.includes(achievement.key);
+            const unlocked = Boolean(date) || earnedHere;
             return (
-              <li key={achievement.key} className={`space-y-1 ${panel}`} data-earned={date ? "true" : undefined}>
+              <li
+                key={achievement.key}
+                className={`space-y-1 ${panel}`}
+                data-earned={unlocked ? "true" : undefined}
+              >
                 <div className="flex items-center justify-between gap-4">
                   <span className="font-semibold">{achievement.title}</span>
                   <span
                     className={`text-xs font-semibold uppercase tracking-wide ${
-                      date ? "text-pink-600 dark:text-pink-400" : "text-gray-500"
+                      unlocked ? "text-pink-600 dark:text-pink-400" : "text-gray-500"
                     }`}
                   >
-                    {date ? `Earned ${date.toLocaleDateString("en-US")}` : "Locked"}
+                    {date
+                      ? `Earned ${date.toLocaleDateString("en-US")}`
+                      : earnedHere
+                        ? "Earned, sign in to keep it"
+                        : "Locked"}
                   </span>
                 </div>
                 <p className={`text-sm ${mutedText}`}>{achievement.body}</p>

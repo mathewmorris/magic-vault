@@ -66,6 +66,7 @@ test("signed out, it's kept for later and asks them to sign in", () => {
   expect(unlock).not.toHaveBeenCalled();
   expect(pendingAchievements()).toEqual(["untap-step"]);
   expect(success).toHaveBeenCalledWith(expect.stringContaining("Sign in to keep it"));
+  expect(screen.getByText("Earned, sign in to keep it")).toBeTruthy();
   expect(screen.getByRole("link", { name: "Sign in" }).getAttribute("href")).toBe("/api/auth/signin?callbackUrl=%2Fsettings");
 });
 
