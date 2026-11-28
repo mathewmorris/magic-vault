@@ -136,8 +136,11 @@ export type OrientedRecognitionDeps = {
   embedBurst(cards: RgbaImage[]): Promise<number[]>;
   /** Embed one crop. */
   embed(card: RgbaImage): Promise<number[]>;
-  /** OCR one crop; null when OCR isn't loaded or failed. */
-  ocr(card: RgbaImage): Promise<CardOcrResult | null>;
+  /**
+   * OCR one crop, `orientation` being how far it was turned from the
+   * capture; null when OCR isn't loaded or failed.
+   */
+  ocr(card: RgbaImage, orientation: Orientation): Promise<CardOcrResult | null>;
   /** scan.match (the caller adds the model id and limit). */
   match(input: OrientedMatchInput): Promise<ScanMatchResult>;
 };
@@ -202,7 +205,7 @@ export async function recognizeOriented(
   const candidates = orientationCandidates(capture.quad);
 
   // Upright: the whole burst, OCR alongside, one server call.
-  const [embedding, uprightOcr] = await Promise.all([deps.embedBurst(capture.cards), deps.ocr(capture.best)]);
+  const [embedding, uprightOcr] = await Promise.all([deps.embedBurst(capture.cards), deps.ocr(capture.best, 0)]);
   const uprightPrinting = printingQuery(uprightOcr);
   const uprightServer = await deps.match({ embedding, printing: uprightPrinting });
   const uprightResult = rank(uprightServer, uprightOcr, 0, capture.best);
@@ -235,7 +238,7 @@ export async function recognizeOriented(
   const orientation = turns[variant - 1]!;
   const card = turned[variant - 1]!;
   // The upright OCR read the card the wrong way round; read it again this way.
-  const ocr = await deps.ocr(card);
+  const ocr = await deps.ocr(card, orientation);
   const printing = printingQuery(ocr);
   let final: ScanMatchResult = { ...server, printing: null };
   if (printing) {

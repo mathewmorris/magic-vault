@@ -140,6 +140,7 @@ const capture: CardCapture = {
   detection: { quad, score: 0.9, source: "opencv" },
   cards: [flatCard, flatCard],
   best: flatCard,
+  loose: flatCard,
 };
 
 const boltOcr: CardOcrResult = {

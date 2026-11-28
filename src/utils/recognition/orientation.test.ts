@@ -1,7 +1,7 @@
 import { describe, expect, it, jest } from "@jest/globals";
 
 import type { ScanCard, ScanMatch, ScanMatchResult } from "~/server/api/routers/scan";
-import { orderCorners, rectToQuad, rotateImage, warpQuad, type Point, type Quad } from "./geometry";
+import { orderCorners, rectToQuad, rotateImage, warpQuad, type Orientation, type Point, type Quad } from "./geometry";
 import type { CardOcrResult } from "./ocr";
 import {
   bestVariantIndex,
@@ -187,6 +187,8 @@ type Fakes = {
   deps: OrientedRecognitionDeps;
   embedded: RgbaImage[];
   ocrRead: RgbaImage[];
+  /** The orientation passed with each OCR read. */
+  ocrTurns: Orientation[];
   calls: OrientedMatchInput[];
 };
 
@@ -198,6 +200,7 @@ type Fakes = {
 function fakes(answers: ScanMatchResult[], ocrResults: (CardOcrResult | null)[]): Fakes {
   const embedded: RgbaImage[] = [];
   const ocrRead: RgbaImage[] = [];
+  const ocrTurns: Orientation[] = [];
   const calls: OrientedMatchInput[] = [];
   let next = 0;
   let ocrNext = 0;
@@ -207,8 +210,9 @@ function fakes(answers: ScanMatchResult[], ocrResults: (CardOcrResult | null)[])
       embedded.push(image);
       return Promise.resolve([100 + embedded.length]);
     },
-    ocr: (image) => {
+    ocr: (image, orientation) => {
       ocrRead.push(image);
+      ocrTurns.push(orientation);
       return Promise.resolve(ocrResults[ocrNext++] ?? null);
     },
     match: (input) => {
@@ -218,7 +222,7 @@ function fakes(answers: ScanMatchResult[], ocrResults: (CardOcrResult | null)[])
       return Promise.resolve(answer);
     },
   };
-  return { deps, embedded, ocrRead, calls };
+  return { deps, embedded, ocrRead, ocrTurns, calls };
 }
 
 const best = patterned(4, 6);
@@ -273,6 +277,7 @@ describe("recognizeOriented", () => {
     expect(Array.from(f.embedded[0]!.data)).toEqual(Array.from(rotateImage(best, 180).data));
     expect(f.ocrRead).toHaveLength(2);
     expect(f.ocrRead[1]).toBe(f.embedded[0]);
+    expect(f.ocrTurns).toEqual([0, 180]);
     expect(out.card).toBe(f.embedded[0]);
     expect(f.calls).toEqual([
       { embedding: [2], printing: undefined },

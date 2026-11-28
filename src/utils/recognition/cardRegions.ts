@@ -65,6 +65,20 @@ export const CARD_REGIONS = {
   setSymbol: { left: 0.8, top: 0.535, width: 0.155, height: 0.09 },
 } as const satisfies Record<string, CardRegion>;
 
+/**
+ * Wider bands for the loose crop (the card warped with its quad grown by
+ * LOOSE_SCALE, see browser/pipeline.ts), as fractions of that crop. The card
+ * itself sits from about 6.5% to 93.5% of it each way. These bands cover where
+ * the name and the collector lines land even when a detected corner was off
+ * by several percent, which the tight rects above can't.
+ */
+export const LOOSE_REGIONS = {
+  /** The top of the card: the title bar and some of the art under it. */
+  title: { left: 0.03, top: 0, width: 0.94, height: 0.22 },
+  /** The bottom left: both collector lines and a little of the text box. */
+  collector: { left: 0, top: 0.78, width: 0.6, height: 0.22 },
+} as const satisfies Record<string, CardRegion>;
+
 export type CardRegionName = keyof typeof CARD_REGIONS;
 
 /**

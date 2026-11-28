@@ -18,6 +18,7 @@ import type { RecognitionResult } from "../fuse";
 import { EMBED_MODEL, POSE_MODEL } from "../model";
 import { createCardOcr, type CardOcr, type CardOcrResult } from "../ocr";
 import { recognizeOriented, type Orientation } from "../orientation";
+import { rotateImage } from "../geometry";
 import type { RgbaImage } from "../preprocess";
 import { createCardDetector, type CardDetector, type Detection } from "./detector";
 import { createEmbedder, embedBurst, type Embedder } from "./embedder";
@@ -199,9 +200,9 @@ export function useCardRecognizer() {
         {
           embedBurst: (cards) => embedBurst(engine.embedder, cards),
           embed: (card) => engine.embedder.embed(card),
-          ocr: (card) =>
+          ocr: (card, orientation) =>
             ocr
-              ? ocr.read(card).catch((error: unknown) => {
+              ? ocr.read(card, rotateImage(capture.loose, orientation)).catch((error: unknown) => {
                   console.error("OCR failed for this card", error);
                   return null;
                 })

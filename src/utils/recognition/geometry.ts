@@ -353,6 +353,16 @@ export function quadStability(a: Quad, b: Quad, frameDiagonal: number): number {
   return total / 4 / frameDiagonal;
 }
 
+/**
+ * The quad grown (or shrunk) by `factor` about its centroid, corners in the
+ * same order. 1.15 adds 7.5% of each side's length on every side.
+ */
+export function scaleQuad(quad: Quad, factor: number): Quad {
+  const cx = (quad[0].x + quad[1].x + quad[2].x + quad[3].x) / 4;
+  const cy = (quad[0].y + quad[1].y + quad[2].y + quad[3].y) / 4;
+  return quad.map((p) => ({ x: cx + (p.x - cx) * factor, y: cy + (p.y - cy) * factor })) as unknown as Quad;
+}
+
 /** An axis-aligned rectangle as a TL, TR, BR, BL quad. */
 export function rectToQuad(rect: { x: number; y: number; width: number; height: number }): Quad {
   const { x, y, width, height } = rect;

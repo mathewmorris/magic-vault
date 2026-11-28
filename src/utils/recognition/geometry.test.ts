@@ -12,6 +12,7 @@ import {
   rectToQuad,
   rotate180,
   rotateImage,
+  scaleQuad,
   sharpness,
   warpQuad,
   type Point,
@@ -413,5 +414,18 @@ describe("quadStability", () => {
 describe("quadArea", () => {
   it("computes the area of a rectangle", () => {
     expect(quadArea(rectToQuad({ x: 1, y: 2, width: 3, height: 4 }))).toBe(12);
+  });
+});
+
+describe("scaleQuad", () => {
+  it("grows a quad about its centroid, keeping the corner order", () => {
+    const quad = rectToQuad({ x: 10, y: 20, width: 100, height: 140 });
+    expect(scaleQuad(quad, 1.5)).toEqual([
+      { x: -15, y: -15 },
+      { x: 135, y: -15 },
+      { x: 135, y: 195 },
+      { x: -15, y: 195 },
+    ]);
+    expect(scaleQuad(quad, 1)).toEqual(quad);
   });
 });
