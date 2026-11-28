@@ -12,7 +12,7 @@ import { type Provider } from "next-auth/providers/index";
 
 import { env } from "~/env";
 import { prisma } from "~/server/db";
-import { isPreviewLoginEnabled } from "~/server/previewLogin/enabled";
+import { previewAuthPages } from "~/server/previewLogin/enabled";
 
 /**
  * Module augmentation for `next-auth` types. Allows us to add custom properties to the `session`
@@ -54,7 +54,7 @@ export const authOptions: NextAuthOptions = {
   providers: buildProviders(),
   // Previews have no OAuth or email credentials, so their sign-in page would
   // be empty. Send Sign in to the pick-a-test-user page there instead.
-  pages: isPreviewLoginEnabled() ? { signIn: "/preview-login" } : undefined,
+  pages: previewAuthPages(),
 };
 
 /**

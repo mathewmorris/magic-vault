@@ -1,4 +1,4 @@
-import { isPreviewLoginEnabled } from "./enabled";
+import { isPreviewLoginEnabled, previewAuthPages } from "./enabled";
 
 describe("isPreviewLoginEnabled", () => {
   test("is on for Vercel preview deploys", () => {
@@ -16,5 +16,20 @@ describe("isPreviewLoginEnabled", () => {
   test("is off for local dev and Vercel development", () => {
     expect(isPreviewLoginEnabled({ NODE_ENV: "development" })).toBe(false);
     expect(isPreviewLoginEnabled({ VERCEL_ENV: "development", NODE_ENV: "development" })).toBe(false);
+  });
+});
+
+describe("previewAuthPages", () => {
+  test("previews send Sign in to the test user picker", () => {
+    expect(previewAuthPages({ VERCEL_ENV: "preview" })).toEqual({ signIn: "/preview-login" });
+  });
+
+  test("everywhere else gets an empty object, never undefined", () => {
+    // undefined overrides next-auth's own `pages` default and crashes /api/auth/signin.
+    for (const env of [{ VERCEL_ENV: "production" }, { NODE_ENV: "production" }, { NODE_ENV: "development" }]) {
+      const pages = previewAuthPages(env);
+      expect(pages).toEqual({});
+      expect(pages).not.toBeUndefined();
+    }
   });
 });

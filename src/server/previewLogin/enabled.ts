@@ -9,3 +9,14 @@
 export function isPreviewLoginEnabled(env: Record<string, string | undefined> = process.env): boolean {
   return env.VERCEL_ENV === "preview";
 }
+
+/**
+ * next-auth's `pages` option. Always an object: next-auth spreads our options
+ * over its defaults, so `pages: undefined` wipes its own `pages` and
+ * /api/auth/signin crashes reading `pages.signIn`.
+ */
+export function previewAuthPages(
+  env: Record<string, string | undefined> = process.env,
+): { signIn?: string } {
+  return isPreviewLoginEnabled(env) ? { signIn: "/preview-login" } : {};
+}
