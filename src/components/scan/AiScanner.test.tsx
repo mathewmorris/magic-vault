@@ -333,7 +333,7 @@ describe("AiScanner", () => {
     expect(screen.getByText("Checking the card scanner...")).toBeTruthy();
   });
 
-  test("falls back when the server has no image index yet", async () => {
+  test("still scans by the printed text when the server has no image index yet", async () => {
     mockState.status = {
       data: { enabled: true, modelId: EMBED_MODEL.id, indexed: 0 },
       isLoading: false,
@@ -345,9 +345,9 @@ describe("AiScanner", () => {
 
     render(<Harness onUnavailable={onUnavailable} />);
 
-    await waitFor(() => expect(onUnavailable).toHaveBeenCalledTimes(1));
-    expect(onUnavailable).toHaveBeenCalledWith(expect.stringMatching(/reads card names instead/));
-    expect(detectorLoad).not.toHaveBeenCalled();
+    await waitFor(() => expect(detectorLoad).toHaveBeenCalled());
+    expect(screen.getByText(/No card pictures are indexed yet/)).toBeTruthy();
+    expect(onUnavailable).not.toHaveBeenCalled();
   });
 
   test("falls back when the index was built with another model", async () => {

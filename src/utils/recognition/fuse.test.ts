@@ -184,6 +184,20 @@ describe("rankRecognition", () => {
     expect(result.confident).toBe(true);
   });
 
+  test("with no image index at all, the set, number and name still make it confident", () => {
+    const result = rankRecognition({
+      matches: [],
+      printing: boltM11,
+      ocrName: "Lightning Bolt",
+      collector: collector("m11", "149"),
+    });
+
+    expect(result.candidates.map((c) => c.card.id)).toEqual(["bolt-m11"]);
+    expect(result.confident).toBe(true);
+    // High enough for hands-free scanning to add it (AUTO_ADD_MIN_SCORE is 0.55).
+    expect(result.candidates[0]!.score).toBeGreaterThanOrEqual(0.55);
+  });
+
   test("the printing lookup joins when it agrees with the top image match even with no name", () => {
     const result = rankRecognition({
       matches: [match(bolt2xm, 0.8), match(blast, 0.4)],

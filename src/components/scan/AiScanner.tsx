@@ -472,11 +472,11 @@ export default function AiScanner({
     [onUnavailable],
   );
 
+  // An empty image index still scans: the card is found, squared up and read,
+  // and the set and number at the bottom find the printing (see fuse.ts path b).
   const indexReady =
-    status.data !== undefined &&
-    status.data.enabled &&
-    status.data.indexed > 0 &&
-    status.data.modelId === EMBED_MODEL.id;
+    status.data !== undefined && status.data.enabled && status.data.modelId === EMBED_MODEL.id;
+  const textOnly = indexReady && status.data.indexed === 0;
 
   useEffect(() => {
     if (status.isError) {
@@ -768,6 +768,12 @@ export default function AiScanner({
   return (
     // Browsers only allow sound after a tap, so any tap here unlocks the chime.
     <div className="flex flex-col gap-4" onPointerDown={() => soundOn && signalRef.current?.unlock()}>
+      {textOnly && (
+        <p className="text-sm text-gray-400">
+          No card pictures are indexed yet, so this matches by the name and the set and number at the bottom.
+          Cards without a set code there, mostly from before 2015, won&apos;t match yet.
+        </p>
+      )}
       {(loadState.status === "idle" || loadingProgress !== null) && (
         <div role="status" className="flex flex-col gap-1 text-sm">
           <span>
