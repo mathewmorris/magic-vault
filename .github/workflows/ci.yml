@@ -176,6 +176,7 @@ jobs:
       # Turns on the test-user sign-in (src/server/previewLogin/enabled.ts).
       VERCEL_ENV: "preview"
       E2E_FAKE_CAMERA: ${{ github.workspace }}/e2e-out/card.y4m
+      E2E_FAKE_CAMERA_FLIPPED: ${{ github.workspace }}/e2e-out/card-flipped.y4m
       E2E_SCAN_TARGET: ${{ github.workspace }}/e2e-out/target.json
       E2E_SOURCE_MAPS: "1"
     steps:
@@ -200,6 +201,10 @@ jobs:
           ffmpeg -loglevel error -loop 1 -i e2e-out/card.png \
             -vf "scale=-2:600,pad=1280:720:(ow-iw)/2:(oh-ih)/2:color=0x2a2a2a,format=yuv420p" \
             -t 4 -r 15 e2e-out/card.y4m
+          # The same card held upside down.
+          ffmpeg -loglevel error -loop 1 -i e2e-out/card.png \
+            -vf "scale=-2:600,hflip,vflip,pad=1280:720:(ow-iw)/2:(oh-ih)/2:color=0x2a2a2a,format=yuv420p" \
+            -t 4 -r 15 e2e-out/card-flipped.y4m
 
       - name: Build
         run: npm run build

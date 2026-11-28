@@ -140,6 +140,18 @@ type Lock = {
 
 const CORNER_LABELS = ["TL", "TR", "BR", "BL"] as const;
 
+/**
+ * Debug label for corner `i` of a detection (corners come in screen order).
+ * Once a scan has worked out which way up the card is, label its real
+ * corners: a card held upside down has its top-left at the screen's
+ * bottom-right. Sideways turns (90/270) are about a landscape crop, not the
+ * corners, so those keep screen order.
+ */
+export function cornerLabel(i: number, orientation: number | null | undefined): string {
+  const shift = orientation === 180 ? 2 : 0;
+  return CORNER_LABELS[(i + shift) % 4]!;
+}
+
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 const NO_CARD_NOTICE =
@@ -229,10 +241,13 @@ function QuadOverlay({
   quad,
   locked,
   raw,
+  orientation,
 }: {
   frame: { width: number; height: number };
   quad: Quad | null;
   locked: boolean;
+  /** Which way up the last scan found the card, for the debug labels. */
+  orientation?: number | null;
   /** Debug only: the detector's raw output, guide fallback included. */
   raw?: RawDetection | null;
 }) {
@@ -272,7 +287,7 @@ function QuadOverlay({
       {raw !== undefined && (
         <g data-testid="debug-overlay">
           {raw?.quad.map((p, i) => (
-            <g key={CORNER_LABELS[i]}>
+            <g key={CORNER_LABELS[i]} data-testid="debug-corner">
               <circle cx={p.x} cy={p.y} r={dot} fill="rgb(236,72,153)" />
               <text
                 x={p.x + dot * 1.5}
@@ -283,7 +298,7 @@ function QuadOverlay({
                 strokeWidth={font / 10}
                 paintOrder="stroke"
               >
-                {CORNER_LABELS[i]}
+                {cornerLabel(i, orientation)}
               </text>
             </g>
           ))}
@@ -815,6 +830,7 @@ export default function AiScanner({
                     quad={liveQuad}
                     locked={outlineStill}
                     raw={debug ? liveRaw : undefined}
+                    orientation={outlineStill ? view?.orientation : null}
                   />
                   {flashId !== null && (
                     <div

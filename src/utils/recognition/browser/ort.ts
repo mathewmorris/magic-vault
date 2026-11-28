@@ -99,27 +99,96 @@ export function executionProviders(preferWebGpu = true): ("webgpu" | "wasm")[] {
   return preferWebGpu && hasGpu ? ["webgpu", "wasm"] : ["wasm"];
 }
 
+/** Set once WebGPU has failed on this page, so later sessions go straight to WASM. */
+let webGpuFailed = false;
+
+/** For tests. */
+export function resetWebGpuFailure(): void {
+  webGpuFailed = false;
+}
+
+type FallbackSession = {
+  run(...args: never[]): Promise<unknown>;
+  release?(): Promise<void> | void;
+};
+
+/**
+ * Wrap a WebGPU session so a failed `run` rebuilds the model on WASM and runs
+ * the same inputs again. WebGPU kernels can fail on the first real run even
+ * when the session built fine (quantized models hit "scale and zero-point
+ * inputs must have the same rank" on some GPUs), so checking at create time
+ * isn't enough. After the switch every call goes to WASM.
+ */
+export function withWasmFallback<S extends FallbackSession>(gpu: S, makeWasm: () => Promise<S>): S {
+  let current: S = gpu;
+  let onGpu = true;
+  let switching: Promise<S> | null = null;
+
+  const switchToWasm = (error: unknown): Promise<S> => {
+    switching ??= (async () => {
+      webGpuFailed = true;
+      console.warn("WebGPU failed while running a model, using WASM instead:", error);
+      const wasm = await makeWasm();
+      const old = current;
+      current = wasm;
+      onGpu = false;
+      try {
+        await old.release?.();
+      } catch {
+        // Already gone; nothing to free.
+      }
+      return wasm;
+    })();
+    return switching;
+  };
+
+  const run = async (...args: never[]): Promise<unknown> => {
+    if (!onGpu) return current.run(...args);
+    try {
+      return await current.run(...args);
+    } catch (error) {
+      const wasm = await switchToWasm(error);
+      return wasm.run(...args);
+    }
+  };
+
+  return new Proxy(gpu, {
+    get(_target, prop) {
+      if (prop === "run") return run;
+      if (prop === "release") return () => current.release?.();
+      const value = Reflect.get(current, prop, current) as unknown;
+      return typeof value === "function" ? (value as (...a: unknown[]) => unknown).bind(current) : value;
+    },
+  });
+}
+
 /**
  * Create a session for the model at `url`, on WebGPU when the browser has it
- * (falling back to WASM per operator), and on plain WASM if WebGPU setup
- * fails outright.
+ * (falling back to WASM per operator), and on plain WASM if WebGPU fails,
+ * whether at setup or on a later run.
  */
 export async function createSession(url: string, opts: { preferWebGpu?: boolean } = {}): Promise<OrtSession> {
   const ort = await loadOrt();
   const bytes = await fetchModelBytes(url);
-  const providers = executionProviders(opts.preferWebGpu ?? true);
+  const providers = executionProviders((opts.preferWebGpu ?? true) && !webGpuFailed);
+  const createWasm = () =>
+    ort.InferenceSession.create(bytes.slice(), {
+      executionProviders: ["wasm"],
+      graphOptimizationLevel: "all",
+    });
+  if (!providers.includes("webgpu")) return createWasm();
+
+  let gpu: OrtSession;
   try {
     // A copy, in case a failed attempt detaches or holds on to the buffer.
-    return await ort.InferenceSession.create(providers.includes("webgpu") ? bytes.slice() : bytes, {
+    gpu = await ort.InferenceSession.create(bytes.slice(), {
       executionProviders: providers,
       graphOptimizationLevel: "all",
     });
   } catch (error) {
-    if (!providers.includes("webgpu")) throw error;
+    webGpuFailed = true;
     console.warn("WebGPU session failed, using WASM instead:", error);
-    return ort.InferenceSession.create(bytes, {
-      executionProviders: ["wasm"],
-      graphOptimizationLevel: "all",
-    });
+    return createWasm();
   }
+  return withWasmFallback(gpu, createWasm);
 }

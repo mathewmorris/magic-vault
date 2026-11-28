@@ -359,6 +359,48 @@ describe("recognizeOriented", () => {
     expect(out.result.candidates[0]!.card.id).toBe("shock");
   });
 
+  describe("text only, no card pictures indexed", () => {
+    const empty: ScanMatchResult = { matches: [], printing: null };
+    const noScores: ScanMatchResult = { matches: [], printing: null, variant: 0, variantSimilarities: [null, null] };
+
+    it("reads an upside-down card the other way up and keeps that read", async () => {
+      const f = fakes(
+        [empty, noScores, { matches: [], printing: bolt }],
+        // Upright, the title is noise and the collector line nothing.
+        [ocr(null), ocr("Lightning Bolt", "M11", "149")],
+      );
+
+      const out = await recognizeOriented({ cards: burst, best, quad: cardQuad(180) }, f.deps);
+
+      expect(out.orientation).toBe(180);
+      expect(f.ocrTurns).toEqual([0, 180]);
+      expect(f.calls[2]).toEqual({
+        embedding: [101],
+        printing: { set: "M11", collectorNumber: "149", name: "Lightning Bolt" },
+      });
+      expect(out.server.printing).toEqual(bolt);
+      expect(out.result.confident).toBe(true);
+      expect(out.result.candidates[0]!.card.id).toBe("bolt");
+    });
+
+    it("stays upright when the upside-down read finds no more", async () => {
+      const f = fakes([empty, noScores], [ocr("Shock"), ocr(null)]);
+
+      const out = await recognizeOriented({ cards: burst, best, quad: cardQuad(0) }, f.deps);
+
+      expect(out.orientation).toBe(0);
+      expect(out.card).toBe(best);
+      expect(out.orientationsTried).toEqual([0, 180]);
+      expect(f.calls).toHaveLength(2);
+    });
+
+    it("keeps upright on a tie", async () => {
+      const f = fakes([empty, noScores], [ocr("Shock"), ocr("Kcohs")]);
+      const out = await recognizeOriented({ cards: burst, best, quad: cardQuad(0) }, f.deps);
+      expect(out.orientation).toBe(0);
+    });
+  });
+
   it("ignores the name on a split card even upright", async () => {
     const split: ScanMatchResult = { matches: [m(fireIce, 0.62), m(shock, 0.6)], printing: null };
     const f = fakes([split, { ...split, variant: 0, variantSimilarities: [0.62, 0.3] }], [ocr("Shock")]);

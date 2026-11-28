@@ -198,6 +198,66 @@ function samePrinting(a: PrintingQuery | undefined, b: PrintingQuery | undefined
 }
 
 /**
+ * Did the image index score the orientations at all? With no card pictures
+ * indexed (or nothing indexed for this card) every variant comes back null,
+ * and "variant 0" only means nothing won.
+ */
+export function imageCanTellOrientation(server: ScanMatchResult): boolean {
+  return (server.variantSimilarities ?? []).some((s) => typeof s === "number");
+}
+
+/** How much the OCR on one orientation found: a printing beats a set and number beats a name. */
+export function textEvidence(ocr: CardOcrResult | null, server: ScanMatchResult): number {
+  let score = 0;
+  if (server.printing) score += 4;
+  if (ocr?.collector?.setCode && ocr.collector.collectorNumber) score += 2;
+  if (ocr?.name) score += 1;
+  return score;
+}
+
+/**
+ * Without image scores, read the card upside down too and keep that read
+ * when it's sure, or when it found more on the card than the upright read.
+ * A card held upside down reads as noise the right way up and cleanly
+ * turned. Ties keep upright. Null when there's no 180 turn to try.
+ */
+async function readUpsideDown(
+  capture: { best: RgbaImage },
+  deps: OrientedRecognitionDeps,
+  ctx: {
+    upright: OrientedRecognition;
+    server: ScanMatchResult;
+    turns: Orientation[];
+    turned: RgbaImage[];
+    alternates: number[][];
+  },
+): Promise<OrientedRecognition | null> {
+  const index = ctx.turns.indexOf(180);
+  if (index < 0) return null;
+  const orientationsTried: Orientation[] = [0, ...ctx.turns];
+  const card = ctx.turned[index] ?? rotateImage(capture.best, 180);
+  const ocr = await deps.ocr(card, 180);
+  const printing = printingQuery(ocr);
+  const variant = index + 1;
+  const flipped: ScanMatchResult = printing
+    ? {
+        ...(await deps.match({ embedding: ctx.alternates[index]!, printing })),
+        variant,
+        variantSimilarities: ctx.server.variantSimilarities,
+      }
+    : { ...ctx.server, printing: null, variant };
+  const result = rank(flipped, ocr, 180, card);
+  const upright = { ...ctx.upright, orientationsTried, server: ctx.server };
+
+  if (upright.result.confident) return upright;
+  if (result.confident) return { orientation: 180, orientationsTried, card, ocr, server: flipped, result };
+  const uprightEvidence = textEvidence(upright.ocr, ctx.upright.server);
+  return textEvidence(ocr, flipped) > uprightEvidence
+    ? { orientation: 180, orientationsTried, card, ocr, server: flipped, result }
+    : upright;
+}
+
+/**
  * One capture (the burst's crops, the sharpest of them, and the detection's
  * quad) -> embedding, OCR, server match and ranking, in the orientation that
  * matched best. See the top of this file for when the other orientations are
@@ -236,6 +296,14 @@ export async function recognizeOriented(
   }
   const orientationsTried: Orientation[] = [0, ...turns];
   const server = await deps.match({ embedding, alternates, printing: uprightPrinting });
+  if (!imageCanTellOrientation(server)) {
+    // No card pictures to compare against (or none close): let the text decide.
+    return (await readUpsideDown(capture, deps, { upright, server, turns, turned, alternates })) ?? {
+      ...upright,
+      orientationsTried,
+      server,
+    };
+  }
   const variant = server.variant ?? 0;
   // Upright still wins: same matches as before, now with the variant scores.
   if (variant <= 0 || variant > turns.length) return { ...upright, orientationsTried, server };

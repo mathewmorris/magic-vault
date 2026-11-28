@@ -8,6 +8,11 @@
  * e2e/scan/seed-cards.mjs and makes the fake camera video. Skipped without
  * E2E_FAKE_CAMERA and E2E_SCAN_TARGET.
  *
+ * Four runs: two test users with the card upright, one with the card held
+ * upside down (E2E_FAKE_CAMERA_FLIPPED), and one with WebGPU switched on
+ * (SwiftShader, a software GPU), since phones run the models on WebGPU and
+ * headless Chromium otherwise has none.
+ *
  * Findings are also printed as GitHub annotations, so they show on the PR's
  * checks without opening the log.
  */
@@ -15,6 +20,7 @@ import { expect, test, type CDPSession, type Page } from "@playwright/test";
 import { readFileSync } from "node:fs";
 
 const videoFile = process.env.E2E_FAKE_CAMERA;
+const flippedVideoFile = process.env.E2E_FAKE_CAMERA_FLIPPED ?? videoFile;
 const targetFile = process.env.E2E_SCAN_TARGET;
 const target = targetFile
   ? (JSON.parse(readFileSync(targetFile, "utf8")) as { name: string; set: string; collectorNumber: string })
@@ -27,16 +33,18 @@ const ADD_TIMEOUT_MS = 90_000;
 
 test.skip(!videoFile || !target, "Needs E2E_FAKE_CAMERA and E2E_SCAN_TARGET (see the CI job)");
 
-test.use({
-  permissions: ["camera"],
-  launchOptions: {
-    args: [
-      "--use-fake-ui-for-media-stream",
-      "--use-fake-device-for-media-stream",
-      `--use-file-for-fake-video-capture=${videoFile ?? ""}`,
-    ],
-  },
-});
+test.use({ permissions: ["camera"] });
+
+function cameraArgs(video: string | undefined): string[] {
+  return [
+    "--use-fake-ui-for-media-stream",
+    "--use-fake-device-for-media-stream",
+    `--use-file-for-fake-video-capture=${video ?? ""}`,
+  ];
+}
+
+/** WebGPU on SwiftShader, so the WebGPU path runs without a real GPU. */
+const WEBGPU_ARGS = ["--enable-unsafe-webgpu", "--enable-unsafe-swiftshader", "--use-webgpu-adapter=swiftshader"];
 
 function annotate(level: "error" | "warning" | "notice", title: string, lines: string[]) {
   const escape = (text: string) => text.replace(/%/g, "%25").replace(/\r/g, "").replace(/\n/g, "%0A");
@@ -146,18 +154,39 @@ async function mainThreadStack(page: Page): Promise<string[]> {
   }
 }
 
-const USERS = [
-  { id: "preview-user-newcomer", label: "Nova, no collections yet" },
-  { id: "preview-user-collector", label: "Casey, has collections" },
+type ScanCase = {
+  /** Test user (src/server/previewLogin/testUsers.ts). */
+  id: string;
+  label: string;
+  video: string | undefined;
+  webGpu?: boolean;
+};
+
+const CASES: ScanCase[] = [
+  { id: "preview-user-newcomer", label: "Nova, no collections yet", video: videoFile },
+  { id: "preview-user-collector", label: "Casey, has collections", video: videoFile },
+  { id: "preview-user-deckbuilder", label: "Dana, card held upside down", video: flippedVideoFile },
+  { id: "preview-user-vintage", label: "Vic, on WebGPU", video: videoFile, webGpu: true },
 ];
 
-for (const user of USERS) {
+for (const user of CASES) {
+  test.describe(user.label, () => {
+    test.use({ launchOptions: { args: [...cameraArgs(user.video), ...(user.webGpu ? WEBGPU_ARGS : [])] } });
+    defineScanTest(user);
+  });
+}
+
+function defineScanTest(user: ScanCase) {
   test(`scans ${target?.name ?? "a card"} hands-free as ${user.label}`, async ({ page }) => {
     test.setTimeout(LOAD_TIMEOUT_MS + ADD_TIMEOUT_MS + 60_000);
     const problems = watchProblems(page);
     const timeline: string[] = [];
     const started = Date.now();
     const mark = (what: string) => timeline.push(`${((Date.now() - started) / 1000).toFixed(1)}s ${what}`);
+    // Which backend ran the models, and any switch from WebGPU to WASM.
+    page.on("console", (message) => {
+      if (/webgpu|wasm/i.test(message.text())) mark(`console.${message.type()}: ${message.text().slice(0, 300)}`);
+    });
 
     try {
       const signIn = await page.request.post("/api/preview-login", {
@@ -169,6 +198,14 @@ for (const user of USERS) {
 
       await page.goto("/scan");
       mark("opened /scan");
+      const gpu = await page.evaluate(async () => {
+        const nav = navigator as Navigator & { gpu?: { requestAdapter(): Promise<unknown> } };
+        if (!nav.gpu) return "no navigator.gpu";
+        const adapter = await nav.gpu.requestAdapter().catch((e: unknown) => String(e));
+        return adapter ? "WebGPU adapter found" : "no WebGPU adapter";
+      });
+      mark(gpu);
+      if (user.webGpu) expect(gpu, "this run needs WebGPU to test the WebGPU path").toBe("WebGPU adapter found");
 
       // Progress while the models load, so a stall shows where it stopped.
       const loading = page.getByRole("status").filter({ hasText: /Loading the card scanner/ });
@@ -225,6 +262,11 @@ for (const user of USERS) {
       }
       await expect(added, "the card was added").toBeVisible({ timeout: 1000 });
       mark(`added ${target!.name}`);
+      const corners = await page
+        .getByTestId("debug-corner")
+        .allTextContents()
+        .catch(() => []);
+      if (corners.length) mark(`debug corner labels: ${corners.join(" ")}`);
       await expect(page.getByText(/Added this session: 1 card/)).toBeVisible();
     } finally {
       // textContent reads the debug panel even while it's folded shut.
