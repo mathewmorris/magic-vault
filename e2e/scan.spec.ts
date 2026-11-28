@@ -16,7 +16,7 @@
  * Findings are also printed as GitHub annotations, so they show on the PR's
  * checks without opening the log.
  */
-import { expect, test, type CDPSession, type Page } from "@playwright/test";
+import { chromium, expect, test, type CDPSession, type Page } from "@playwright/test";
 import { readFileSync } from "node:fs";
 
 const videoFile = process.env.E2E_FAKE_CAMERA;
@@ -32,8 +32,6 @@ const LOAD_TIMEOUT_MS = 150_000;
 const ADD_TIMEOUT_MS = 90_000;
 
 test.skip(!videoFile || !target, "Needs E2E_FAKE_CAMERA and E2E_SCAN_TARGET (see the CI job)");
-
-test.use({ permissions: ["camera"] });
 
 function cameraArgs(video: string | undefined): string[] {
   return [
@@ -169,16 +167,18 @@ const CASES: ScanCase[] = [
   { id: "preview-user-vintage", label: "Vic, on WebGPU", video: videoFile, webGpu: true },
 ];
 
-for (const user of CASES) {
-  test.describe(user.label, () => {
-    test.use({ launchOptions: { args: [...cameraArgs(user.video), ...(user.webGpu ? WEBGPU_ARGS : [])] } });
-    defineScanTest(user);
-  });
-}
+// Each case needs its own camera video (a browser launch flag), so each
+// launches its own browser instead of sharing the worker's.
+for (const user of CASES) defineScanTest(user);
 
 function defineScanTest(user: ScanCase) {
-  test(`scans ${target?.name ?? "a card"} hands-free as ${user.label}`, async ({ page }) => {
+  test(`scans ${target?.name ?? "a card"} hands-free as ${user.label}`, async ({ baseURL }) => {
     test.setTimeout(LOAD_TIMEOUT_MS + ADD_TIMEOUT_MS + 60_000);
+    const browser = await chromium.launch({
+      args: [...cameraArgs(user.video), ...(user.webGpu ? WEBGPU_ARGS : [])],
+    });
+    const context = await browser.newContext({ baseURL, permissions: ["camera"] });
+    const page = await context.newPage();
     const problems = watchProblems(page);
     const timeline: string[] = [];
     const started = Date.now();
@@ -305,6 +305,7 @@ function defineScanTest(user: ScanCase) {
       const debug = debugTexts === "timeout" ? "" : debugTexts;
       annotate("notice", `Scan timeline (${user.label})`, debug ? [...timeline, "", debug] : timeline);
       if (problems.length > 0) annotate("error", `Page problems (${user.label})`, [...new Set(problems)]);
+      await browser.close().catch(() => undefined);
     }
 
     expect([...new Set(problems)], "no console errors or failed requests").toEqual([]);
