@@ -58,11 +58,9 @@ model Card {
   // Top level only: cards whose faces have their own art keep theirs in card_faces.
   illustration_id  String?
 
-  // No longer written or read: prices live in CardPrice now, so a nightly
-  // price move doesn't rewrite the whole Card row. Kept for one release so
-  // the app version being replaced still works while the new one deploys;
-  // a follow-up migration drops it.
-  prices           Json?   @db.JsonB
+  // Prices live in CardPrice, so a nightly price move doesn't rewrite the
+  // whole Card row.
+
   // Scryfall's purchase_uris. Refreshed by the daily sync.
   purchase_uris    Json?   @db.JsonB
   price            CardPrice?
