@@ -30,4 +30,19 @@ describe("About page", () => {
     expect(screen.queryByText(/\bAI\b/)).toBeNull();
     expect(screen.queryByText(/affiliate/i)).toBeNull();
   });
+
+  test("points people to issues, Discussions and the contributing guide", () => {
+    render(<About />);
+
+    const href = (name: RegExp) => screen.getByRole("link", { name }).getAttribute("href");
+    expect(href(/open an issue on github/i)).toBe(
+      "https://github.com/mathewmorris/magic-vault/issues/new/choose",
+    );
+    expect(href(/github discussions/i)).toBe(
+      "https://github.com/mathewmorris/magic-vault/discussions",
+    );
+    expect(href(/contributing guide/i)).toBe(
+      "https://github.com/mathewmorris/magic-vault/blob/main/CONTRIBUTING.md",
+    );
+  });
 });
