@@ -25,6 +25,7 @@ import ScanMatches, { type MatchOption } from "~/components/scan/ScanMatches";
 import { api } from "~/utils/api";
 import { isFeatureEnabled } from "~/utils/featureFlags";
 import { faceImageUrl, printingDetail } from "~/utils/recognition/display";
+import type { RecognitionCandidate } from "~/utils/recognition/fuse";
 import type { Quad } from "~/utils/recognition/geometry";
 import { AutoCaptureTracker, scaleQuad } from "~/utils/recognition/liveTracking";
 import { EMBED_MODEL } from "~/utils/recognition/model";
@@ -77,6 +78,53 @@ type RawDetection = { quad: Quad; source: Detection["source"]; score: number };
 const CORNER_LABELS = ["TL", "TR", "BR", "BL"] as const;
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+/** How many candidates the debug panel breaks down signal by signal. */
+const DEBUG_SIGNAL_CANDIDATES = 3;
+
+/** Debug only: each cue the fuser weighed for the top candidates. */
+function SignalBreakdown({ candidates }: { candidates: RecognitionCandidate[] }) {
+  return (
+    <div data-testid="debug-signals" className="flex flex-col gap-2">
+      {candidates.map((candidate) => (
+        <div key={`${candidate.card.id}:${candidate.face}`} data-testid="debug-candidate">
+          <p>
+            {candidate.card.name} ({printingDetail(candidate.card) ?? "?"}):{" "}
+            <code>{candidate.score.toFixed(3)}</code>, finish{" "}
+            <code>
+              {candidate.suggestedFinish.finish} {candidate.suggestedFinish.confidence.toFixed(2)}
+            </code>{" "}
+            ({candidate.suggestedFinish.reason})
+          </p>
+          <table className="text-left">
+            <thead>
+              <tr>
+                <th className="pr-3 font-normal">signal</th>
+                <th className="pr-3 font-normal">agree</th>
+                <th className="pr-3 font-normal">quality</th>
+                <th className="font-normal">detail</th>
+              </tr>
+            </thead>
+            <tbody>
+              {candidate.signals.map((signal, index) => (
+                <tr key={`${signal.signal}:${index}`}>
+                  <td className="pr-3">{signal.signal}</td>
+                  <td className="pr-3">
+                    <code>{signal.agreement.toFixed(2)}</code>
+                  </td>
+                  <td className="pr-3">
+                    <code>{signal.quality.toFixed(2)}</code>
+                  </td>
+                  <td>{signal.detail}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 function QuadOverlay({
   frame,
@@ -508,6 +556,9 @@ export default function AiScanner({
                 Top pick: <code>{result.candidates[0].score.toFixed(3)}</code> (
                 {result.candidates[0].reasons.join(", ")})
               </p>
+            )}
+            {result && result.candidates.length > 0 && (
+              <SignalBreakdown candidates={result.candidates.slice(0, DEBUG_SIGNAL_CANDIDATES)} />
             )}
             <p>
               Raw title OCR: <code>{JSON.stringify(outcome.ocr?.rawTitle ?? "")}</code>

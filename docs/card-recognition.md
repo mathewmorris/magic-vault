@@ -10,8 +10,10 @@ image it has indexed and returns the closest cards. It's behind the
 A second flag, `aiScanDebug` (`NEXT_PUBLIC_FEATURE_AI_SCAN_DEBUG`), turns on
 the scanner's debug view: the detector's raw corners labeled TL/TR/BR/BL, which
 detector found them (pose, opencv or guide) and its score, live over the
-camera, plus a panel after each capture with the flattened card, OCR output
-and top server matches. Both flags are read at build time.
+camera, plus a panel after each capture with the flattened card, OCR output,
+top server matches, and for the top three candidates every signal the fuser
+weighed (agreement, quality, detail) and the suggested finish. Both flags are
+read at build time.
 
 The model files load from Hugging Face, pinned to a commit
 (`EMBED_REVISION` and `POSE_REVISION` in `model.ts`). The ONNX Runtime wasm
@@ -41,6 +43,49 @@ face of double-faced cards, with cosine similarity) and the exact printing if
 the set and number match a card. It answers NOT_FOUND while the flag is off,
 and BAD_REQUEST when the client's model id isn't the server's (the page is
 out of date).
+
+## How the scanner decides
+
+`rankRecognition` in `src/utils/recognition/fuse.ts` judges a card the way a
+person would: several independent cues, each with its own confidence. Every
+candidate printing gets a `signals` list with one entry per cue that was read,
+each with an `agreement` (-1 contradicts, 1 agrees) and a `quality` (0..1, how
+readable the cue was):
+
+| Signal | From | Compared with |
+| --- | --- | --- |
+| image | embedding similarity from `scan.match` | (the match itself) |
+| name | title OCR, quality from tesseract's confidence when given | card and face names |
+| collector | set code and number OCR | `set`, `collector_number` |
+| rarity | rarity letter on the collector line, set symbol colour | `rarity` |
+| border | border colour | `border_color` |
+| foil | star (foil) or dot (non-foil) between set code and language | `finishes` |
+
+A cue that wasn't read, or a card field that's missing, is no evidence, never
+negative evidence. Pre-2015 cards have no collector line, so they're judged on
+image, name and the colour cues.
+
+The ranking score is the image similarity plus bonuses for the name and the
+collector line (unchanged from before), plus small bonuses for agreeing
+rarity, border and foil cues and small penalties when one of those clearly
+contradicts (quality 0.6 or more). They're sized to separate two printings
+with the same art, not to overrule a clear image match.
+
+The result is **confident** when nothing with quality 0.6 or more contradicts
+the top pick, and either it leads the runner-up by `CONFIDENT_MARGIN` and at
+least two of image, name and collector agree with it at good quality, or it's
+the exact printing the collector line names and its name agrees. Rarity,
+border and foil never count toward the two (they only narrow things down a
+little), but any of them can veto. A strong image match alone isn't enough.
+
+Each candidate also gets a `suggestedFinish`: the printing's only finish if it
+has one, else what the foil mark says if the printing comes in that finish,
+else non-foil with low confidence. The foil mark is read conservatively: only
+a real star glyph is "foil", only a real dot is "non-foil", and `*` (how both
+often come out of OCR) is unknown.
+
+All the weights are first guesses, exported from `fuse.ts`; the tests pin who
+wins, not exact numbers.
 
 ## How the index is built
 

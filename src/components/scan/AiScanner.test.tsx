@@ -138,7 +138,14 @@ const capture: CardCapture = {
 
 const boltOcr: CardOcrResult = {
   name: "Lightning Bolt",
-  collector: { collectorNumber: "149", setCode: "m11", lang: "en", rarity: "C", total: "249" },
+  collector: {
+    collectorNumber: "149",
+    setCode: "m11",
+    lang: "en",
+    rarity: "C",
+    total: "249",
+    foilMark: "nonfoil",
+  },
   rawTitle: "Lightning Bolt R",
   rawCollector: "149/249 C\nM11 • EN",
 };
@@ -392,5 +399,31 @@ describe("AiScanner", () => {
     mockState.detection = null;
     await waitFor(() => expect(screen.getByTestId("debug-detector").textContent).toBe("no card"));
     expect(within(overlay).queryByText("TL")).toBeNull();
+  });
+
+  test("the debug panel breaks the top candidates down signal by signal", async () => {
+    render(<Harness debug />);
+
+    const captureButton = await screen.findByRole<HTMLButtonElement>("button", { name: "Capture" });
+    await waitFor(() => expect(captureButton.disabled).toBe(false));
+    fireEvent.click(captureButton);
+    await screen.findByRole("button", { name: /Lightning Bolt M11 #149/ });
+
+    const breakdown = screen.getByTestId("debug-signals");
+    const candidates = within(breakdown).getAllByTestId("debug-candidate");
+    expect(candidates).toHaveLength(3);
+
+    // Top pick: the M11 Bolt, with each cue it was judged on.
+    const top = candidates[0]!;
+    expect(top.textContent).toContain("M11 #149");
+    expect(top.textContent).toMatch(/finish nonfoil/);
+    const rows = within(top)
+      .getAllByRole("row")
+      .slice(1)
+      .map((row) => within(row).getAllByRole("cell").map((cell) => cell.textContent));
+    expect(rows.map((cells) => cells[0])).toEqual(["image", "name", "collector", "rarity"]);
+    const collectorRow = rows.find((cells) => cells[0] === "collector")!;
+    expect(collectorRow[1]).toBe("1.00");
+    expect(collectorRow[3]).toMatch(/m11 #149 matches/);
   });
 });
