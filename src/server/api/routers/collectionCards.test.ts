@@ -2,7 +2,7 @@ import prismaMock from "singleton";
 import { createInnerTRPCContext } from "../trpc";
 import { appRouter } from "../root";
 import { TRPCError } from "@trpc/server";
-import { type CardsOnCollections, type Collection } from "@prisma/client";
+import { type Card, type CardsOnCollections, type Collection } from "@prisma/client";
 import { buildCard } from "../../testing/cardFixture";
 import { buyLinks } from "~/utils/buyLinks";
 import { toCardEntries } from "./collection";
@@ -69,6 +69,24 @@ describe("collection card procedures", () => {
     });
 
     describe("cards", () => {
+        test("puts each card's prices from CardPrice on the card", async () => {
+            const lotus = buildCard({ id: "lotus", prices: { usd: "1.00" } });
+            prismaMock.cardsOnCollections.findMany.mockResolvedValue([buildEntry({ cardId: "lotus" })]);
+            prismaMock.card.findMany.mockResolvedValue([
+                { ...lotus, price: { prices: { usd: "10.00" } } },
+            ] as Card[]);
+
+            const [entry] = await authedCaller().collection.cards({ collectionId });
+
+            // The old "Card"."prices" column is ignored.
+            expect(entry?.card).toStrictEqual({ ...lotus, prices: { usd: "10.00" } });
+            expect(entry?.card).not.toHaveProperty("price");
+            expect(prismaMock.card.findMany).toHaveBeenCalledWith({
+                where: { id: { in: ["lotus"] } },
+                include: { price: { select: { prices: true } } },
+            });
+        });
+
         test("returns cards with finish and count in the order the entries come back", async () => {
             const lotus = buildCard({ id: "lotus", name: "Black Lotus" });
             const mox = buildCard({ id: "mox", name: "Mox Pearl" });
@@ -78,7 +96,10 @@ describe("collection card procedures", () => {
                 buildEntry({ cardId: "mox", finish: "foil", count: 1 }),
             ]);
             // The card lookup comes back in a different order on purpose.
-            prismaMock.card.findMany.mockResolvedValue([lotus, mox]);
+            prismaMock.card.findMany.mockResolvedValue([
+                { ...lotus, price: null },
+                { ...mox, price: { prices: null } },
+            ] as Card[]);
 
             await expect(
                 authedCaller().collection.cards({ collectionId })
@@ -333,9 +354,9 @@ describe("collection card procedures", () => {
                 buildEntry({ collectionId: "b", cardId: "gone", count: 1 }),
             ]);
             prismaMock.card.findMany.mockResolvedValue([
-                buildCard({ id: "lotus", prices: { usd: "10.00", usd_foil: null } }),
-                buildCard({ id: "mox", prices: null }),
-            ]);
+                { id: "lotus", price: { prices: { usd: "10.00", usd_foil: null } } },
+                { id: "mox", price: null },
+            ] as unknown as Card[]);
 
             await expect(authedCaller().collection.values()).resolves.toStrictEqual({
                 a: { totalCents: 2000, unpriced: 1 },
@@ -348,7 +369,7 @@ describe("collection card procedures", () => {
             });
             expect(prismaMock.card.findMany).toHaveBeenCalledWith({
                 where: { id: { in: ["lotus", "mox", "gone"] } },
-                select: { id: true, prices: true },
+                select: { id: true, price: { select: { prices: true } } },
             });
         });
 

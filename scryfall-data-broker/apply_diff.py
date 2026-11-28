@@ -1,4 +1,5 @@
-"""Turn a DeepDiff result into database operations for the Card table.
+"""Turn a DeepDiff result into database operations for the Card and
+CardPrice tables.
 
 The planning half of this module is pure: it takes plain dicts shaped like
 DeepDiff's output (``DeepDiff(old, new, group_by='id', verbose_level=2)``,
@@ -23,8 +24,14 @@ UPDATE = "UPDATE"
 SKIP = "SKIP"
 
 TABLE = '"Card"'
+PRICE_TABLE = '"CardPrice"'
+
+# Scryfall's prices object lives in its own table (CardPrice), so a nightly
+# price move rewrites a small row instead of the whole card.
+PRICE_FIELD = "prices"
 
 # Columns the Card table stores (see prisma/schema.prisma), besides "id".
+# "Card"."prices" still exists for one release but is no longer written.
 STORED_FIELDS = (
     "name",
     "scryfall_uri",
@@ -54,9 +61,10 @@ STORED_FIELDS = (
     "legalities",
     "finishes",
     "lang",
-    "prices",
     "purchase_uris",
 )
+# Every Scryfall field this module writes somewhere.
+SYNCED_FIELDS = STORED_FIELDS + (PRICE_FIELD,)
 REQUIRED_FIELDS = ("name", "scryfall_uri", "image_status", "layout")
 JSON_FIELDS = (
     "image_uris",
@@ -139,6 +147,11 @@ def card_to_row(card_id: str, card: Dict[str, Any]) -> Dict[str, Any]:
     return row
 
 
+def price_row(card: Dict[str, Any]) -> Dict[str, Any]:
+    """The CardPrice columns for a Scryfall card, besides "cardId"."""
+    return {PRICE_FIELD: card.get(PRICE_FIELD)}
+
+
 def _missing_required(row: Dict[str, Any]) -> List[str]:
     return [name for name in REQUIRED_FIELDS
             if name in row and row[name] is None]
@@ -157,8 +170,9 @@ def plan_operations(
     list (``card_faces[0]``). Without it those cards are skipped.
 
     Changes that only touch columns we don't store (edhrec_rank, ...) make
-    no operation at all. Prices are stored, so a price change is an UPDATE
-    (with the full new ``prices`` object when ``new_cards_by_id`` is given).
+    no operation at all. Prices are stored (in CardPrice), so a price change
+    is an UPDATE whose fields hold the full new ``prices`` object when
+    ``new_cards_by_id`` is given.
     """
     inserts: List[Operation] = []
     skips: List[Operation] = []
@@ -195,7 +209,7 @@ def plan_operations(
                 continue
 
             column = keys[1]
-            if column not in STORED_FIELDS:
+            if column not in SYNCED_FIELDS:
                 continue
             columns = touched.setdefault(card_id, {})
             _record_change(columns, column, report_type, len(keys) == 2,
@@ -240,14 +254,14 @@ def _plan_insert(card_id, card, new_cards_by_id) -> Operation:
         return Operation(
             SKIP, card_id,
             reason=f"new card is missing required {', '.join(missing)}")
-    return Operation(INSERT, card_id, row)
+    return Operation(INSERT, card_id, {**row, **price_row(card)})
 
 
 def _plan_update(card_id, columns, new_cards_by_id) -> Operation:
     new_card = (new_cards_by_id or {}).get(card_id)
     values: Dict[str, Any] = {}
     unresolved = []
-    for column in STORED_FIELDS:
+    for column in SYNCED_FIELDS:
         if column not in columns:
             continue
         if new_card is not None:
@@ -306,13 +320,41 @@ def _param(column: str, value: Any) -> Any:
 
 
 def insert_sql() -> str:
+    """Upsert one Card row.
+
+    A row whose stored columns already match is left alone rather than
+    rewritten, so a run that has lost its saved hashes (or whose hash format
+    changed) doesn't rewrite the whole table.
+    """
     columns = ("id",) + STORED_FIELDS
     names = ", ".join(_quote(c) for c in columns)
     values = ", ".join(_placeholder(c) for c in columns)
     updates = ", ".join(f"{_quote(c)} = EXCLUDED.{_quote(c)}"
                         for c in STORED_FIELDS)
+    current = ", ".join(f"{TABLE}.{_quote(c)}" for c in STORED_FIELDS)
+    incoming = ", ".join(f"EXCLUDED.{_quote(c)}" for c in STORED_FIELDS)
     return (f"INSERT INTO {TABLE} ({names}) VALUES ({values}) "
-            f'ON CONFLICT ("id") DO UPDATE SET {updates}')
+            f'ON CONFLICT ("id") DO UPDATE SET {updates} '
+            f"WHERE ({current}) IS DISTINCT FROM ({incoming})")
+
+
+def price_upsert_sql() -> str:
+    """Upsert one CardPrice row, if its card exists.
+
+    Like insert_sql, a row whose prices already match is left alone. A price
+    for a card that isn't in the Card table is dropped rather than failing
+    the whole transaction on the foreign key.
+    """
+    return (f'INSERT INTO {PRICE_TABLE} ("cardId", "prices", "updatedAt") '
+            f'SELECT c."id", %s::jsonb, now() FROM {TABLE} c '
+            f'WHERE c."id" = %s '
+            f'ON CONFLICT ("cardId") DO UPDATE SET '
+            f'"prices" = EXCLUDED."prices", "updatedAt" = EXCLUDED."updatedAt" '
+            f'WHERE {PRICE_TABLE}."prices" IS DISTINCT FROM EXCLUDED."prices"')
+
+
+def price_params(op: Operation) -> Tuple[Any, ...]:
+    return (_param(PRICE_FIELD, op.fields.get(PRICE_FIELD)), op.card_id)
 
 
 def insert_params(op: Operation) -> Tuple[Any, ...]:
@@ -349,9 +391,13 @@ def execute_operations(conn, operations: List[Operation],
     for op in operations:
         if op.kind == UPDATE:
             columns = tuple(c for c in STORED_FIELDS if c in op.fields)
-            updates_by_columns.setdefault(columns, []).append(op)
+            if columns:  # a price-only change has no Card columns
+                updates_by_columns.setdefault(columns, []).append(op)
         elif op.kind == SKIP:
             logger.info(describe_operation(op))
+    # After the Card writes, so a new card's price has its card to point at.
+    prices = [op for op in operations
+              if op.kind in (INSERT, UPDATE) and PRICE_FIELD in op.fields]
 
     cursor = conn.cursor()
     try:
@@ -366,6 +412,10 @@ def execute_operations(conn, operations: List[Operation],
                     sql, [update_params(op, columns) for op in batch])
                 logger.info("Updated batch of %d cards (%s)",
                             len(batch), ", ".join(columns))
+        sql = price_upsert_sql()
+        for batch in _batches(prices, batch_size):
+            cursor.executemany(sql, [price_params(op) for op in batch])
+            logger.info("Updated prices for a batch of %d cards", len(batch))
         conn.commit()
     except Exception:
         conn.rollback()

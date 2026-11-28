@@ -69,6 +69,57 @@ describe("collection router (integration)", () => {
     });
   });
 
+  describe("prices", () => {
+    // Prices live in CardPrice, not on the Card row.
+    const addPricedCards = async (collectionId: string) => {
+      await prisma.card.createMany({
+        data: ["lotus", "mox"].map((id) => ({
+          id,
+          name: id,
+          scryfall_uri: `https://scryfall.com/card/${id}`,
+          image_status: "highres_scan",
+          layout: "normal",
+          // The old column is ignored now.
+          prices: { usd: "999.00" },
+        })),
+      });
+      await prisma.cardPrice.create({ data: { cardId: "lotus", prices: { usd: "10.00", usd_foil: "25.00" } } });
+      await prisma.cardsOnCollections.createMany({
+        data: [
+          { collectionId, cardId: "lotus", count: 2 },
+          { collectionId, cardId: "lotus", finish: "foil", count: 1 },
+          { collectionId, cardId: "mox", count: 1 },
+        ],
+      });
+    };
+
+    test("cards and values read prices from CardPrice", async () => {
+      const me = await createUser();
+      const collection = await createCollection(me.id);
+      await addPricedCards(collection.id);
+      const caller = callerFor(me.id);
+
+      const cards = await caller.collection.cards({ collectionId: collection.id });
+      const pricesById = Object.fromEntries(cards.map(({ card }) => [card.id, card.prices]));
+      expect(pricesById).toStrictEqual({ lotus: { usd: "10.00", usd_foil: "25.00" }, mox: null });
+
+      await expect(caller.collection.values()).resolves.toStrictEqual({
+        [collection.id]: { totalCents: 4500, unpriced: 1 },
+      });
+    });
+
+    test("a card's price goes with the card", async () => {
+      const me = await createUser();
+      const collection = await createCollection(me.id);
+      await addPricedCards(collection.id);
+      await prisma.cardsOnCollections.deleteMany({ where: { cardId: "lotus" } });
+
+      await prisma.card.delete({ where: { id: "lotus" } });
+
+      await expect(prisma.cardPrice.count()).resolves.toBe(0);
+    });
+  });
+
   describe("create", () => {
     test("saves a collection that belongs to the caller", async () => {
       const me = await createUser();

@@ -24,7 +24,7 @@ Update database & log changes made
 - without it, reads `DATABASE_URL` and needs `psycopg` or `psycopg2` installed
 - `--cards scryfall_downloads/default_cards_YYYY_MM_DD.json` lets nested changes
   (`image_uris`, `card_faces`, `all_parts`) be applied; without it those cards are skipped
-- only the columns the Card table stores (`STORED_FIELDS` in `apply_diff.py`) are written, all in one transaction, in batches (`--batch-size`, default 500)
+- only the columns the Card table stores (`STORED_FIELDS` in `apply_diff.py`) and prices (to CardPrice) are written, all in one transaction, in batches (`--batch-size`, default 500)
 - cards removed from Scryfall are logged and skipped, since Card has no soft-delete column
 
 Run the tests from this folder (stdlib only; the ijson test skips without it)
@@ -45,17 +45,21 @@ production database (and on demand, dry run by default).
 2. `python sync.py download <download_uri> --out default_cards.json`
 3. `python sync.py apply default_cards.json --state-dir state --updated-at <updated_at> [--dry-run] [--full]`
    streams the file card by card (ijson), hashes the columns the Card table
-   stores, and compares with `state/hashes.json` from the last run. New and
-   changed cards are upserted in batches (`--batch-size`, default 500), all in
-   one transaction. Prices (`prices`, `purchase_uris`) are stored, so a price
-   change is an update; Scryfall refreshes most prices daily, so most rows
-   change every run. Changes to unstored fields (ranks and the like) cause
-   no writes.
+   stores, and compares with `state/hashes.json` from the last run. Prices are
+   hashed on their own (`state/price_hashes.json`) and written to the small
+   CardPrice table, so the daily price refresh rewrites ~200 byte price rows
+   instead of whole Card rows. New and changed cards and prices are upserted
+   in batches (`--batch-size`, default 500), all in one transaction; a row
+   whose values already match is left alone. Changes to unstored fields
+   (ranks and the like) cause no writes.
    With no saved hashes (first run, lost cache) or `--full`, every card is
-   upserted. Nothing is ever deleted; cards removed from Scryfall are logged.
+   sent, but only rows that differ are rewritten. Cards removed from Scryfall
+   are logged; with `--prune` they're deleted (prices too) unless a
+   collection uses them.
    `state/` is only rewritten after the commit succeeds, never on `--dry-run`.
 
 The workflow keeps `state/` (about 10 MB) in the Actions cache between runs.
-If the cache is evicted, the next run is a full upsert, which is safe.
+If the cache is evicted, the next run sends every card, which is safe and
+only rewrites rows that changed.
 `db_updater.py` and the DeepDiff differ above still work for one-off diffs.
 

@@ -124,10 +124,10 @@ export const collectionRouter = createTRPCRouter({
       },
       select: {
         id: true,
-        prices: true,
+        price: { select: { prices: true } },
       },
     })
-    const pricesById = new Map(cards.map(card => [card.id, card.prices]));
+    const pricesById = new Map(cards.map(card => [card.id, card.price?.prices ?? null]));
 
     const byCollection = new Map<string, ValuedEntry[]>();
     for (const { collectionId, cardId, finish, count } of entries) {
@@ -251,8 +251,10 @@ export const collectionRouter = createTRPCRouter({
         where: {
           id: { in: entries.map(entry => entry.cardId) },
         },
+        include: { price: { select: { prices: true } } },
       })
-      const cardsById = new Map(cards.map(card => [card.id, card]));
+      // Prices live in CardPrice; hand them back on the card as before.
+      const cardsById = new Map(cards.map(({ price, ...card }) => [card.id, { ...card, prices: price?.prices ?? null }]));
       const affiliate = affiliateConfig();
 
       return entries.flatMap(({ cardId, finish, condition, language, count }) => {

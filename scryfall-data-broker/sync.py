@@ -10,11 +10,14 @@
 # Instead of loading two ~460 MB bulk files and running DeepDiff on them,
 # "apply" streams the new file one card at a time and compares a hash of the
 # columns we store against the hashes saved by the last run (state/hashes.json,
-# about 10 MB). New cards and cards whose stored columns changed are upserted
-# in batches, all in one transaction. With no saved hashes (first run, lost
-# cache, or --full) every card is upserted. With --prune, Card rows whose id
-# isn't in the bulk file are deleted afterwards, except any card a collection
-# still references; those are kept and logged.
+# about 10 MB). Prices are hashed on their own (state/price_hashes.json) and
+# written to the small CardPrice table, so a card whose price moved but
+# nothing else changed doesn't rewrite its Card row. New and changed cards
+# and prices are upserted in batches, all in one transaction; a row that
+# already matches is left alone. With no saved hashes (first run, lost cache,
+# or --full) every card is sent. With --prune, Card rows whose id isn't in the
+# bulk file are deleted afterwards (their prices go with them), except any
+# card a collection still references; those are kept and logged.
 #
 # State is only written after the database commit succeeds, and never on a
 # dry run, so a failed or dry run leaves the next run to pick up the changes.
@@ -32,7 +35,7 @@ from urllib.parse import urlsplit
 
 import apply_diff
 import db_updater
-from apply_diff import INSERT, UPDATE, Operation
+from apply_diff import INSERT, PRICE_FIELD, UPDATE, Operation
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 logger = logging.getLogger('sync')
@@ -46,6 +49,9 @@ HEADERS = {
 }
 STATE_FILE = 'state.json'
 HASHES_FILE = 'hashes.json'
+PRICE_HASHES_FILE = 'price_hashes.json'
+# An operation for a card whose price changed and nothing else.
+PRICE = 'PRICE'
 # Scryfall serves bulk files from these hosts.
 DOWNLOAD_HOST_SUFFIXES = ('.scryfall.io', '.scryfall.com')
 
@@ -77,9 +83,15 @@ def load_hashes(state_dir):
     return load_json(os.path.join(state_dir, HASHES_FILE), {})
 
 
-def save_state(state_dir, hashes, updated_at, card_count):
+def load_price_hashes(state_dir):
+    return load_json(os.path.join(state_dir, PRICE_HASHES_FILE), {})
+
+
+def save_state(state_dir, hashes, updated_at, card_count, price_hashes=None):
     os.makedirs(state_dir, exist_ok=True)
     write_json_atomic(os.path.join(state_dir, HASHES_FILE), hashes)
+    write_json_atomic(os.path.join(state_dir, PRICE_HASHES_FILE),
+                      price_hashes or {})
     write_json_atomic(os.path.join(state_dir, STATE_FILE), {
         'updated_at': updated_at,
         'card_count': card_count,
@@ -101,15 +113,23 @@ def row_hash(row):
 class SyncPlan:
     """Compare streamed cards to the last run's hashes.
 
-    Iterate ``operations()`` once; afterwards ``hashes`` holds the new
-    id -> hash map and ``removed`` the ids that disappeared from Scryfall.
+    Iterate ``operations()`` once; afterwards ``hashes`` and ``price_hashes``
+    hold the new id -> hash maps and ``removed`` the ids that disappeared
+    from Scryfall.
+
+    Each operation's fields hold the Card columns when they changed (INSERT,
+    UPDATE) and ``prices`` when the price changed; a PRICE operation has only
+    ``prices``.
     """
 
-    def __init__(self, cards, previous_hashes):
+    def __init__(self, cards, previous_hashes, previous_price_hashes=None):
         self._cards = cards
         self.previous = previous_hashes
+        self.previous_prices = previous_price_hashes or {}
         self.hashes = {}
-        self.counts = {INSERT: 0, UPDATE: 0, 'UNCHANGED': 0, 'SKIP': 0}
+        self.price_hashes = {}
+        self.counts = {INSERT: 0, UPDATE: 0, PRICE: 0, 'UNCHANGED': 0,
+                       'SKIP': 0}
         self.removed = []
         # Every id in the file, skipped cards included, so prune keeps them.
         self.seen = set()
@@ -134,15 +154,27 @@ class SyncPlan:
                 continue
             digest = row_hash(row)
             self.hashes[card_id] = digest
+            prices = apply_diff.price_row(card)
+            price_digest = row_hash(prices)
+            self.price_hashes[card_id] = price_digest
             old = self.previous.get(card_id)
-            if old == digest:
+            card_changed = old != digest
+            price_changed = self.previous_prices.get(card_id) != price_digest
+            if not card_changed and not price_changed:
                 self.counts['UNCHANGED'] += 1
                 continue
-            kind = INSERT if old is None else UPDATE
+            if card_changed:
+                kind = INSERT if old is None else UPDATE
+                fields = dict(row)
+            else:
+                kind = PRICE
+                fields = {}
+            if price_changed:
+                fields.update(prices)
             self.counts[kind] += 1
-            # Both are written as an upsert, so a card the database already
+            # All are written as upserts, so a card the database already
             # has (first run, lost cache) is updated rather than duplicated.
-            yield Operation(kind, card_id, row)
+            yield Operation(kind, card_id, fields)
         self.removed = sorted(set(self.previous) - set(self.hashes))
         self.done = True
 
@@ -206,13 +238,21 @@ def execute_upserts(conn, operations, batch_size=500):
     """Upsert streamed operations in batches, all in one transaction."""
     if batch_size < 1:
         raise ValueError('batch_size must be at least 1')
-    sql = apply_diff.insert_sql()
+    card_sql = apply_diff.insert_sql()
+    price_sql = apply_diff.price_upsert_sql()
     written = 0
     cursor = conn.cursor()
     try:
         for batch in _batches(operations, batch_size):
-            cursor.executemany(sql, [apply_diff.insert_params(op)
-                                     for op in batch])
+            cards = [op for op in batch if op.kind in (INSERT, UPDATE)]
+            prices = [op for op in batch if PRICE_FIELD in op.fields]
+            if cards:
+                cursor.executemany(card_sql, [apply_diff.insert_params(op)
+                                              for op in cards])
+            # After the cards, so a new card's price has its card.
+            if prices:
+                cursor.executemany(price_sql, [apply_diff.price_params(op)
+                                               for op in prices])
             written += len(batch)
             logger.info('Upserted %d cards so far', written)
         conn.commit()
@@ -413,10 +453,11 @@ def cmd_download(args):
 
 def cmd_apply(args, cards=None, connect=None):
     previous = {} if args.full else load_hashes(args.state_dir)
+    previous_prices = {} if args.full else load_price_hashes(args.state_dir)
     if not previous:
         logger.info('No saved hashes, upserting every card')
     plan = SyncPlan(cards if cards is not None else iter_cards(args.cards),
-                    previous)
+                    previous, previous_prices)
 
     url = os.environ.get('DATABASE_URL')
     prune = None
@@ -424,7 +465,8 @@ def cmd_apply(args, cards=None, connect=None):
         shown = 0
         for op in plan.operations():
             if shown < 20:
-                print(f"{op.kind} {op.card_id} ({op.fields.get('name')})")
+                name = op.fields.get('name')
+                print(f"{op.kind} {op.card_id}" + (f" ({name})" if name else ''))
                 shown += 1
         if args.prune and url:
             conn = (connect or connect_with_retry)(url)
@@ -447,7 +489,8 @@ def cmd_apply(args, cards=None, connect=None):
 
     counts = plan.counts
     summary = (f"{len(plan.hashes)} cards: {counts[INSERT]} new, "
-               f"{counts[UPDATE]} changed, {counts['UNCHANGED']} unchanged, "
+               f"{counts[UPDATE]} changed, {counts[PRICE]} with only a new "
+               f"price, {counts['UNCHANGED']} unchanged, "
                f"{counts['SKIP']} skipped, {len(plan.removed)} removed "
                f"from Scryfall since the last run")
     if prune is not None:
@@ -467,7 +510,8 @@ def cmd_apply(args, cards=None, connect=None):
         print(f'Dry run, nothing written. {summary}')
         return 0
 
-    save_state(args.state_dir, plan.hashes, args.updated_at, len(plan.hashes))
+    save_state(args.state_dir, plan.hashes, args.updated_at, len(plan.hashes),
+               plan.price_hashes)
     logger.info('Done. %s', summary)
     print(summary)
     return 0

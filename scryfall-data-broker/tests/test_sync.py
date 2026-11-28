@@ -9,6 +9,7 @@ from unittest import mock
 
 import sync
 from apply_diff import INSERT, UPDATE
+from sync import PRICE
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 FIXTURE = os.path.join(os.path.dirname(HERE), 'test.json')
@@ -32,6 +33,16 @@ def card(card_id, name='Forest', **overrides):
 def hashes_for(cards):
     return {c['id']: sync.row_hash(sync.apply_diff.card_to_row(c['id'], c))
             for c in cards}
+
+
+def price_hashes_for(cards):
+    return {c['id']: sync.row_hash(sync.apply_diff.price_row(c))
+            for c in cards}
+
+
+def plan_for(new, old):
+    """A plan comparing new cards to the hashes old cards would have left."""
+    return sync.SyncPlan(iter(new), hashes_for(old), price_hashes_for(old))
 
 
 class FakeCursor:
@@ -87,11 +98,13 @@ class RowHashTest(unittest.TestCase):
         b = card('a', edhrec_rank=200)
         self.assertEqual(hashes_for([a]), hashes_for([b]))
 
-    def test_price_change_counts(self):
-        # Prices are stored, so a daily price move is an update.
+    def test_prices_are_hashed_on_their_own(self):
+        # A daily price move changes the price hash, not the card hash, so
+        # it doesn't rewrite the Card row.
         a = card('a', prices={'usd': '1.00'})
         b = card('a', prices={'usd': '9.00'})
-        self.assertNotEqual(hashes_for([a]), hashes_for([b]))
+        self.assertEqual(hashes_for([a]), hashes_for([b]))
+        self.assertNotEqual(price_hashes_for([a]), price_hashes_for([b]))
 
 
 class SyncPlanTest(unittest.TestCase):
@@ -101,7 +114,9 @@ class SyncPlanTest(unittest.TestCase):
         ops = list(plan.operations())
         self.assertEqual([(op.kind, op.card_id) for op in ops],
                          [(INSERT, 'a'), (INSERT, 'b')])
+        self.assertEqual(ops[0].fields['prices'], {'usd': '0.21'})
         self.assertEqual(plan.hashes, hashes_for(cards))
+        self.assertEqual(plan.price_hashes, price_hashes_for(cards))
         self.assertEqual(plan.removed, [])
 
     def test_finds_new_changed_unchanged_and_removed(self):
@@ -109,29 +124,49 @@ class SyncPlanTest(unittest.TestCase):
         new = [card('a'),
                card('b', 'Island', image_uris={'small': 'new.jpg'}),
                card('c', 'Mountain')]
-        plan = sync.SyncPlan(iter(new), hashes_for(old))
+        plan = plan_for(new, old)
         ops = list(plan.operations())
         self.assertEqual([(op.kind, op.card_id) for op in ops],
                          [(UPDATE, 'b'), (INSERT, 'c')])
         self.assertEqual(ops[0].fields['image_uris'], {'small': 'new.jpg'})
+        # b's price didn't move, so its update leaves prices alone.
+        self.assertNotIn('prices', ops[0].fields)
         self.assertEqual(plan.counts['UNCHANGED'], 1)
         self.assertEqual(plan.removed, ['gone'])
         self.assertNotIn('gone', plan.hashes)
 
-    def test_price_change_is_an_update(self):
+    def test_price_only_change_is_a_price_operation(self):
         old = [card('a')]
         new = [card('a', prices={'usd': '0.25', 'usd_foil': '1.10'})]
-        plan = sync.SyncPlan(iter(new), hashes_for(old))
+        plan = plan_for(new, old)
         [op] = list(plan.operations())
-        self.assertEqual(op.kind, UPDATE)
-        self.assertEqual(op.fields['prices'],
-                         {'usd': '0.25', 'usd_foil': '1.10'})
+        self.assertEqual(op.kind, PRICE)
+        self.assertEqual(op.fields,
+                         {'prices': {'usd': '0.25', 'usd_foil': '1.10'}})
+        self.assertEqual(plan.counts[PRICE], 1)
 
-    def test_rows_hold_only_stored_columns(self):
+    def test_card_and_price_change_together(self):
+        old = [card('a')]
+        new = [card('a', name='Renamed', prices={'usd': '9.99'})]
+        [op] = list(plan_for(new, old).operations())
+        self.assertEqual(op.kind, UPDATE)
+        self.assertEqual(op.fields['name'], 'Renamed')
+        self.assertEqual(op.fields['prices'], {'usd': '9.99'})
+
+    def test_no_saved_price_hashes_resends_prices(self):
+        # The first run after prices moved to their own table: card hashes
+        # match but there are no price hashes yet.
+        cards = [card('a')]
+        plan = sync.SyncPlan(iter(cards), hashes_for(cards), {})
+        [op] = list(plan.operations())
+        self.assertEqual((op.kind, op.fields), (PRICE, {'prices': {'usd': '0.21'}}))
+
+    def test_rows_hold_only_stored_columns_and_prices(self):
         plan = sync.SyncPlan(iter([card('a')]), {})
         [op] = list(plan.operations())
         self.assertEqual(set(op.fields),
-                         {'id'} | set(sync.apply_diff.STORED_FIELDS))
+                         {'id', 'prices'} | set(sync.apply_diff.STORED_FIELDS))
+        self.assertNotIn('prices', sync.apply_diff.STORED_FIELDS)
 
     def test_skips_cards_missing_required_columns_without_hashing(self):
         bad = card('a')
@@ -152,11 +187,24 @@ class ExecuteUpsertsTest(unittest.TestCase):
         written = sync.execute_upserts(conn, self.ops(5), batch_size=2)
         self.assertEqual(written, 5)
         calls = conn.cursor_obj.calls
-        self.assertEqual([len(params) for _, params in calls], [2, 2, 1])
+        # Each batch writes its cards, then their prices.
+        self.assertEqual([len(params) for _, params in calls],
+                         [2, 2, 2, 2, 1, 1])
         self.assertIn('ON CONFLICT ("id") DO UPDATE', calls[0][0])
+        self.assertIn('INSERT INTO "CardPrice"', calls[1][0])
+        self.assertEqual(calls[1][1][0], (json.dumps({'usd': '0.21'}), '0'))
         self.assertTrue(conn.committed)
         self.assertFalse(conn.rolled_back)
         self.assertTrue(conn.cursor_obj.closed)
+
+    def test_price_only_batch_skips_the_card_upsert(self):
+        conn = FakeConnection()
+        old = [card('a')]
+        ops = plan_for([card('a', prices={'usd': '5.00'})], old).operations()
+        sync.execute_upserts(conn, ops)
+        [(sql, params)] = conn.cursor_obj.calls
+        self.assertIn('INSERT INTO "CardPrice"', sql)
+        self.assertEqual(params, [(json.dumps({'usd': '5.00'}), 'a')])
 
     def test_rolls_back_everything_on_error(self):
         conn = FakeConnection(FakeCursor(fail_on_call=2))
@@ -207,19 +255,26 @@ class ApplyCommandTest(unittest.TestCase):
         self.assertEqual(sync.load_hashes(self.state), hashes_for(cards))
         self.assertEqual(sync.load_state(self.state)['updated_at'], 'T1')
 
-        changed = [card('a'), card('b', 'Island', layout='transform')]
+        self.assertEqual(sync.load_price_hashes(self.state),
+                         price_hashes_for(cards))
+
+        changed = [card('a', prices={'usd': '0.30'}),
+                   card('b', 'Island', layout='transform')]
         conn, out = self.run_apply(changed, updated_at='T2')
-        [(_, params)] = conn.cursor_obj.calls
-        self.assertEqual([p[0] for p in params], ['b'])
-        self.assertIn('0 new, 1 changed, 1 unchanged', out)
+        [(_, card_params), (_, price_params)] = conn.cursor_obj.calls
+        self.assertEqual([p[0] for p in card_params], ['b'])
+        self.assertEqual([p[1] for p in price_params], ['a'])
+        self.assertIn('0 new, 1 changed, 1 with only a new price, 0 unchanged',
+                      out)
         self.assertEqual(sync.load_state(self.state)['updated_at'], 'T2')
 
     def test_full_ignores_saved_hashes(self):
         cards = [card('a')]
-        sync.save_state(self.state, hashes_for(cards), 'T1', 1)
+        sync.save_state(self.state, hashes_for(cards), 'T1', 1,
+                        price_hashes_for(cards))
         conn, _ = self.run_apply(cards, full=True)
-        [(_, params)] = conn.cursor_obj.calls
-        self.assertEqual(len(params), 1)
+        [(_, card_params), (_, price_params)] = conn.cursor_obj.calls
+        self.assertEqual((len(card_params), len(price_params)), (1, 1))
 
     def test_dry_run_never_connects_or_saves_state(self):
         def no_connect(url):

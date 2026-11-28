@@ -1,7 +1,7 @@
 import { Prisma } from "@prisma/client";
 
 import { type ScryfallCard } from "./client";
-import { cacheScryfallCards, toCardRow } from "./cacheCards";
+import { cacheScryfallCards, toCardRow, toPriceRow } from "./cacheCards";
 
 const bolt: ScryfallCard = {
   id: "bolt-2ed",
@@ -63,15 +63,13 @@ describe("toCardRow", () => {
       legalities: { modern: "legal", standard: "not_legal" },
       finishes: ["nonfoil"],
       lang: "en",
-      prices: { usd: "450.00", usd_foil: null, eur: null },
       purchase_uris: { tcgplayer: "https://www.tcgplayer.com/product/1" },
     });
   });
 
-  test("stores a card with no prices as a database null", () => {
-    const row = toCardRow({ ...bolt, prices: undefined, purchase_uris: null });
-    expect(row.prices).toBe(Prisma.DbNull);
-    expect(row.purchase_uris).toBe(Prisma.DbNull);
+  test("leaves prices out, since they live in CardPrice", () => {
+    expect(toCardRow(bolt)).not.toHaveProperty("prices");
+    expect(toCardRow({ ...bolt, purchase_uris: null }).purchase_uris).toBe(Prisma.DbNull);
   });
 
   test("keeps cmc 0 instead of treating it as missing", () => {
@@ -79,14 +77,41 @@ describe("toCardRow", () => {
   });
 });
 
+describe("toPriceRow", () => {
+  test("keys the prices by card id", () => {
+    expect(toPriceRow(bolt)).toStrictEqual({ cardId: "bolt-2ed", prices: { usd: "450.00", usd_foil: null, eur: null } });
+  });
+
+  test("stores a card with no prices as a database null", () => {
+    expect(toPriceRow({ ...bolt, prices: undefined }).prices).toBe(Prisma.DbNull);
+  });
+});
+
 describe("cacheScryfallCards", () => {
-  test("skips cards missing a required column", async () => {
-    const createMany = jest.fn().mockResolvedValue({ count: 1 });
-    const prisma = { card: { createMany } } as unknown as Parameters<typeof cacheScryfallCards>[0];
+  const writer = () => {
+    const calls: string[] = [];
+    const card = { createMany: jest.fn(() => { calls.push("card"); return Promise.resolve({ count: 1 }); }) };
+    const cardPrice = { createMany: jest.fn(() => { calls.push("cardPrice"); return Promise.resolve({ count: 1 }); }) };
+    const prisma = { card, cardPrice } as unknown as Parameters<typeof cacheScryfallCards>[0];
+    return { prisma, card, cardPrice, calls };
+  };
+
+  test("skips cards missing a required column and writes prices after cards", async () => {
+    const { prisma, card, cardPrice, calls } = writer();
 
     const count = await cacheScryfallCards(prisma, [bolt, { ...bolt, id: "x", layout: "" }]);
 
     expect(count).toBe(1);
-    expect(createMany).toHaveBeenCalledWith({ data: [toCardRow(bolt)], skipDuplicates: true });
+    expect(card.createMany).toHaveBeenCalledWith({ data: [toCardRow(bolt)], skipDuplicates: true });
+    expect(cardPrice.createMany).toHaveBeenCalledWith({ data: [toPriceRow(bolt)], skipDuplicates: true });
+    expect(calls).toStrictEqual(["card", "cardPrice"]);
+  });
+
+  test("writes nothing when no card can be stored", async () => {
+    const { prisma, card, cardPrice } = writer();
+
+    await expect(cacheScryfallCards(prisma, [{ ...bolt, layout: "" }])).resolves.toBe(0);
+    expect(card.createMany).not.toHaveBeenCalled();
+    expect(cardPrice.createMany).not.toHaveBeenCalled();
   });
 });

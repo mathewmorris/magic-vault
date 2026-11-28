@@ -46,10 +46,14 @@ model Card {
   finishes         Json?   @db.JsonB
   lang             String?
 
-  // Scryfall's prices object (usd, usd_foil, usd_etched, eur, ...; values are
-  // decimal strings or null) and purchase_uris. Refreshed by the daily sync.
+  // No longer written or read: prices live in CardPrice now, so a nightly
+  // price move doesn't rewrite the whole Card row. Kept for one release so
+  // the app version being replaced still works while the new one deploys;
+  // a follow-up migration drops it.
   prices           Json?   @db.JsonB
+  // Scryfall's purchase_uris. Refreshed by the daily sync.
   purchase_uris    Json?   @db.JsonB
+  price            CardPrice?
   embeddings       CardEmbedding[]
 
   @@index([oracle_id])
@@ -58,6 +62,18 @@ model Card {
   // extension is created in the migration that adds them.
   @@index([name(ops: raw("gin_trgm_ops"))], type: Gin)
   @@index([oracle_text(ops: raw("gin_trgm_ops"))], type: Gin)
+}
+
+// Scryfall's prices object for one card (usd, usd_foil, usd_etched, eur,
+// ...; values are decimal strings or null). Its own table because prices
+// change every day and the rest of the card almost never does: the nightly
+// sync rewrites these small rows instead of ~2 KB Card rows. Goes with the
+// card when the card is deleted.
+model CardPrice {
+  card      Card     @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  cardId    String   @id
+  prices    Json?    @db.JsonB
+  updatedAt DateTime @default(now())
 }
 
 // Image embedding of one card face, for AI card recognition. Built by

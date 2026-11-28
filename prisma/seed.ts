@@ -4,7 +4,8 @@ import { type ReadableStream as WebReadableStream } from 'node:stream/web';
 import { PrismaClient } from '@prisma/client';
 
 import { bulkDownloadUri, readBulkCards, type BulkDataObject } from '../src/server/scryfall/bulkFile';
-import { toCardRow } from '../src/server/scryfall/cacheCards';
+import { isStorableCard, toCardRow, toPriceRow } from '../src/server/scryfall/cacheCards';
+import { type ScryfallCard } from '../src/server/scryfall/client';
 
 const prisma = new PrismaClient();
 
@@ -37,21 +38,22 @@ async function openDefaultCards(): Promise<Readable> {
  * Scryfall sync workflow keeps existing rows up to date.
  */
 async function main() {
-  let batch: ReturnType<typeof toCardRow>[] = [];
+  let batch: ScryfallCard[] = [];
   let seen = 0;
   let inserted = 0;
 
   const flush = async () => {
     if (batch.length === 0) return;
-    const { count } = await prisma.card.createMany({ data: batch, skipDuplicates: true });
+    const { count } = await prisma.card.createMany({ data: batch.map(toCardRow), skipDuplicates: true });
+    await prisma.cardPrice.createMany({ data: batch.map(toPriceRow), skipDuplicates: true });
     inserted += count;
     batch = [];
   };
 
   for await (const card of readBulkCards(await openDefaultCards())) {
     seen += 1;
-    if (!card.id || !card.name || !card.scryfall_uri || !card.image_status || !card.layout) continue;
-    batch.push(toCardRow(card));
+    if (!isStorableCard(card)) continue;
+    batch.push(card);
     if (batch.length >= BATCH_SIZE) {
       await flush();
       if (seen % 20000 < BATCH_SIZE) console.log(`read ${seen} cards, inserted ${inserted}`);
