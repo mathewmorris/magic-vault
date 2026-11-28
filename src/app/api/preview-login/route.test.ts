@@ -1,13 +1,14 @@
 import { type PrismaClient } from "@prisma/client";
-import { type DeepMockProxy, mockReset } from "jest-mock-extended";
+import { type DeepMockProxy, type mockDeep, mockReset } from "jest-mock-extended";
 
 import { prisma } from "~/server/db";
 
 import { GET, POST } from "./route";
 
-jest.mock("~/server/db", () => ({
-  prisma: jest.requireActual<typeof import("jest-mock-extended")>("jest-mock-extended").mockDeep(),
-}));
+jest.mock("~/server/db", () => {
+  const actual = jest.requireActual<{ mockDeep: typeof mockDeep }>("jest-mock-extended");
+  return { prisma: actual.mockDeep<PrismaClient>() };
+});
 
 const prismaMock = prisma as unknown as DeepMockProxy<PrismaClient>;
 
@@ -71,7 +72,7 @@ describe("preview login API on previews", () => {
 
     expect(response.status).toBe(303);
     expect(response.headers.get("location")).toBe("https://magic-vault-git-x-magicians.vercel.app/");
-    const session = prismaMock.session.create.mock.calls[0]![0].data as { userId: string; sessionToken: string };
+    const session = prismaMock.session.create.mock.calls[0]![0].data as unknown as { userId: string; sessionToken: string };
     expect(session.userId).toBe("preview-user-vintage");
     const cookie = response.headers.get("set-cookie") ?? "";
     expect(cookie).toContain(`__Secure-next-auth.session-token=${session.sessionToken}`);

@@ -82,7 +82,7 @@ describe("ensureTestUser", () => {
 
     await ensureTestUser(prisma, dana);
 
-    const data = prisma.user.create.mock.calls[0]![0].data as {
+    const data = prisma.user.create.mock.calls[0]![0].data as unknown as {
       id: string;
       email: string;
       collections: { create: { name: string; cardEntries: { create: unknown[] } }[] };
