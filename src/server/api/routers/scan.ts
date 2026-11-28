@@ -24,6 +24,13 @@ export const scanCardSelect = {
   layout: true,
   image_uris: true,
   card_faces: true,
+  // What the printing looks like, to check against the scanner's colour
+  // cues (src/utils/recognition/colourCues.ts).
+  border_color: true,
+  frame: true,
+  frame_effects: true,
+  promo_types: true,
+  finishes: true,
 } satisfies Prisma.CardSelect;
 
 export type ScanCard = Prisma.CardGetPayload<{ select: typeof scanCardSelect }>;

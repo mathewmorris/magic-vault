@@ -73,6 +73,16 @@ export interface ScryfallCard {
   legalities?: Record<string, string> | null;
   finishes?: string[] | null;
   lang?: string | null;
+  /** black, white, borderless, silver, gold or yellow. */
+  border_color?: string | null;
+  /** Frame era: 1993, 1997, 2003, 2015 or future. */
+  frame?: string | null;
+  /** Left out by Scryfall when there are none. */
+  frame_effects?: string[] | null;
+  /** Left out by Scryfall when there are none. */
+  promo_types?: string[] | null;
+  security_stamp?: string | null;
+  illustration_id?: string | null;
   /** Decimal strings keyed by currency and finish (usd, usd_foil, usd_etched, eur, ...). */
   prices?: Record<string, string | null> | null;
   purchase_uris?: Record<string, string> | null;

@@ -34,6 +34,7 @@ This page covers the server side.
 | Indexer | `scripts/embed-cards.ts` (logic in `src/server/recognition/indexer.ts`) |
 | Calibration report | `scripts/calibrate-embedder.ts` |
 | Daily workflow | `.github/workflows/card-embeddings.yml` |
+| Border and rarity colour cues (not wired in yet) | `src/utils/recognition/colourCues.ts` |
 
 `scan.match` takes the embedding, the client's model id and, when OCR read
 one, the set code and collector number. It returns the closest cards (best
@@ -103,3 +104,54 @@ Clients with the old id get BAD_REQUEST until they reload. Matching quality
 drops while the new index fills in, so start the workflow by hand with a
 high limit, and run with `--prune-old-models` once it's done to free the old
 rows.
+
+## Colour cues
+
+Reprints often share art, so the embedding can't tell them apart. Two
+things a person looks at can: the border and the set symbol's colour.
+`src/utils/recognition/colourCues.ts` reads both off the flattened card.
+They're pure functions on RGBA bytes and aren't used by the scan pipeline
+or `fuse.ts` yet.
+
+Each returns `{ value, quality }` or null. Quality (0 to 1) says how far to
+trust the reading and drops with glare (blown highlights), a strip or
+symbol that isn't one clean colour, a dark image and a blurry one. Null
+means "can't tell", not "doesn't match": use it as no evidence.
+
+| Cue | Reads | Compare with | Good for |
+| --- | --- | --- | --- |
+| `sampleBorder` | thin strips just inside all four edges | `border_color` | white-bordered core set and early reprints (Unlimited, Revised, 4th to 9th Edition) against the black-bordered originals; silver (Un-sets) and gold (World Championship decks) borders; borderless printings |
+| `sampleRarityColour` | the set symbol at the right end of the type line | `rarity` | reprints at different rarities (a common in one set, an uncommon or rare in another) |
+
+Both scale colours by the card's brightest 2% first (white balance), so a
+warm lamp doesn't turn a white border or a silver symbol gold.
+
+`scan.match` now returns `border_color`, `frame`, `frame_effects`,
+`promo_types` and `finishes` with each card so the client can compare.
+
+Known failure modes:
+
+- **Foil glare and sleeves.** Fully blown pixels are left out and lower the
+  quality, but a glossy sleeve or foil also adds broad highlights that
+  aren't fully blown. Those can wash a gold symbol out to silver or break
+  up a border so it reads borderless.
+- **Rarity on old cards.** Pre-Exodus cards print every symbol black, and
+  pre-2003 frames (`frame` "1993" and "1997") put the symbol elsewhere.
+  Only use the rarity cue for candidates whose `frame` is "2003" or later.
+  Special rarities (timeshifted purple, bonus) give null.
+- **Borderless art that's dark at every edge** reads as a black border.
+- **A loose crop** (the warp includes some table past the card's edge) can
+  make a bordered card look borderless.
+- The thresholds and the set symbol region were set from the frame's
+  printed proportions and typical printed colours on synthetic images, not
+  calibrated on real photos or Scryfall images yet. Check them against real
+  scans before giving these cues much weight.
+
+The new Card columns (`border_color`, `frame`, `frame_effects`,
+`promo_types`, `security_stamp`, `illustration_id`) are filled by every
+writer: the daily sync, the search fallback cache and the seed. The sync
+hashes the stored columns of each card to find changes, so the first sync
+after migration `20261128080000_add_card_printing_look` sees every card as
+changed and rewrites each row once. That's expected; after that only real
+changes are written. Until that sync runs, existing rows have null
+`border_color` and `frame` and empty lists, so treat those as unknown.
