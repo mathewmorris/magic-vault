@@ -23,6 +23,12 @@ export const emptyCardFields = {
   legalities: null,
   finishes: null,
   lang: null,
+  border_color: null,
+  frame: null,
+  frame_effects: [],
+  promo_types: [],
+  security_stamp: null,
+  illustration_id: null,
   prices: null,
   purchase_uris: null,
 } satisfies Partial<Card>;

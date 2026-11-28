@@ -42,6 +42,12 @@ export function toCardRow(card: ScryfallCard): Prisma.CardCreateManyInput {
     legalities: json(card.legalities),
     finishes: json(card.finishes),
     lang: card.lang ?? null,
+    border_color: card.border_color ?? null,
+    frame: card.frame ?? null,
+    frame_effects: card.frame_effects ?? [],
+    promo_types: card.promo_types ?? [],
+    security_stamp: card.security_stamp ?? null,
+    illustration_id: card.illustration_id ?? null,
     purchase_uris: json(card.purchase_uris),
   };
 }
