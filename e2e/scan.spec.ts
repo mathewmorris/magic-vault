@@ -235,10 +235,24 @@ for (const user of USERS) {
           .catch(() => ""),
         5000,
       );
-      await withTimeout(
-        page.screenshot({ path: test.info().outputPath("scan.png"), fullPage: true }).catch(() => undefined),
+      // Pictures into the log, since the job's artifacts can't always be
+      // fetched: the flattened card the scanner read, and the page.
+      const flat = await withTimeout(
+        page
+          .locator('img[alt="Flattened card sent to the matcher"]')
+          .first()
+          .getAttribute("src", { timeout: 2000 })
+          .catch(() => null),
+        5000,
+      );
+      if (typeof flat === "string") console.log(`E2E_IMAGE flat-card ${user.id} ${flat}`);
+      const shot = await withTimeout(
+        page.screenshot({ type: "jpeg", quality: 60 }).catch(() => null),
         10_000,
       );
+      if (shot && shot !== "timeout") {
+        console.log(`E2E_IMAGE page ${user.id} data:image/jpeg;base64,${shot.toString("base64")}`);
+      }
       const debug = debugTexts === "timeout" ? "" : debugTexts;
       annotate("notice", `Scan timeline (${user.label})`, debug ? [...timeline, "", debug] : timeline);
       if (problems.length > 0) annotate("error", `Page problems (${user.label})`, [...new Set(problems)]);
