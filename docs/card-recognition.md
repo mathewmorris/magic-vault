@@ -38,6 +38,8 @@ This page covers the server side.
 | Calibration report | `scripts/calibrate-embedder.ts` |
 | Daily workflow | `.github/workflows/card-embeddings.yml` |
 | Border and rarity colour cues (not wired in yet) | `src/utils/recognition/colourCues.ts` |
+| Hands-free scan loop rules (auto add threshold, retries, capture size) | `src/utils/recognition/scanLoop.ts` |
+| Lock signal (buzz, chime) and the scanner's remembered settings | `src/utils/scan/lockSignal.ts` |
 
 `scan.match` takes the embedding, the client's model id and, when OCR read
 one, the set code and collector number. It returns the closest cards (best
@@ -162,6 +164,65 @@ often come out of OCR) is unknown.
 
 All the weights are first guesses, exported from `fuse.ts`; the tests pin who
 wins, not exact numbers.
+
+## The scanning loop
+
+The scanner on /scan (`src/components/scan/AiScanner.tsx`) runs hands
+free; there's no Capture button.
+
+1. The live detector looks at about 4 small frames (640 px long side) a
+   second. Once the outline holds still for 800 ms, `AutoCaptureTracker`
+   (`liveTracking.ts`) fires a scan: a burst of 3 frames, then the steps
+   above.
+2. **Sure:** `sureMatch` in `scanLoop.ts` is the auto add threshold: the
+   ranking is `confident` (see "How the scanner decides") and the top pick's
+   score is at least `AUTO_ADD_MIN_SCORE` (0.55, the same as
+   `CONFIDENT_SIMILARITY`). `confident` is the real decision; the floor is a
+   backstop that almost never bites and is there as the one knob to turn if
+   real scans show confident picks that are wrong. The scanner locks onto
+   the top pick: a 60 ms buzz (`navigator.vibrate`, Android only), a short
+   two-note chime made with Web Audio, a green flash on the video (static
+   under prefers-reduced-motion) and the card's name in big type over the
+   video. With "Auto add when sure" on (the default), a signed-in user with
+   a collection gets a copy added through the same `collection.addCard` as
+   the Add button. Signed out, or with no collection, it locks and selects
+   the card and shows the usual sign-in or pick-a-collection prompt.
+3. **Not sure:** it looks again while the card sits there, up to
+   `MAX_SCAN_ATTEMPTS` (3) bursts, then shows the best of those looks (top
+   score) as the matches list for a manual pick, with Rescan.
+4. **Next card.** After a scan the tracker waits for the card to leave
+   (`missesToLeave`, 4 ticks, about a second, so an outline blip doesn't
+   count) or for the outline to jump by 15% of the frame diagonal (a
+   different card put down). The tracker says which (`rearmedBy`): a card
+   that left and came back is another copy and is added again; a jump that
+   turns out to be the same card is a nudge and adds nothing.
+5. **Undo** takes the auto-added copy back out with `collection.removeCard`
+   (one copy, the same call as the session tally's Undo) and shows the
+   matches so the right card can be picked. **Rescan** does the same Undo
+   if this lock added a copy, then scans the card in view again.
+6. With no outline for 3 seconds, a small "Scan now" button scans the
+   frame anyway, using the on-screen guide if nothing is found.
+
+The chime can only play after the user has touched the page (a browser
+rule), so any tap on the scanner unlocks it. The Sound and Auto add
+settings are remembered in localStorage.
+
+**Photos aren't kept.** Frames and crops live only for the scan; the lock
+banner and the matches show Scryfall's image. Only the embedding and the OCR
+reads go to the server. The debug view alone keeps the last flattened card
+as a data URL, to show it.
+
+**Capture size.** `captureMaxSide` picks each burst's frame size from the
+live outline. Everything the models see comes from the card warped to
+488x680 (`CARD_WIDTH` x `CARD_HEIGHT`): the embedder squashes that to
+320x448, and OCR reads the title and the collector line off it, upscaled 2
+to 3 times. So the frame only needs the card at about 680 x 1.25 = 850 px
+tall; past that the warp shrinks it without filtering, which reads small
+print worse, not better. Frames are scaled so the card is about that tall,
+between 640 (the corner model's input) and 1280 (`CAPTURE_MAX_SIDE`, kept
+for a small or distant card) on the long side. Frames are drawn from the
+video at that size straight away, so no full-resolution copy is made 4
+times a second.
 
 ## How the index is built
 

@@ -1,34 +1,55 @@
 "use client";
 
 /**
- * AI card scanning for /scan (behind the aiScan feature flag).
+ * AI card scanning for /scan (behind the aiScan feature flag). Hands free:
  *
  *   1. While the camera runs, a card detector looks at about 4 frames a
  *      second and the card's outline is drawn over the video.
- *   2. Once the outline holds still (or the user presses Capture), a short
- *      burst of frames is taken, the card is cut out and flattened, and an
- *      image model turns it into an embedding; OCR reads the name and the
- *      collector info off the sharpest frame at the same time.
+ *   2. Once the outline holds still, a short burst of frames is taken, the
+ *      card is cut out and flattened, and an image model turns it into an
+ *      embedding; OCR reads the name and the collector info off the sharpest
+ *      frame at the same time.
  *   3. The server finds the closest printings by embedding (and the exact
  *      printing by set + number when OCR read them), and ~/utils/recognition
  *      /fuse ranks everything together.
- *   4. The user picks/adds the card just like the title-OCR flow.
+ *   4. Sure (see sureMatch in ~/utils/recognition/scanLoop): it locks onto
+ *      the top match, buzzes, chimes and flashes green, and adds it to the
+ *      current collection (when "Auto add when sure" is on and there's a
+ *      signed-in user with a collection; otherwise it selects it and waits
+ *      for Add). Then it waits for the card to leave the frame, or for a
+ *      different card to be put down, before scanning again, so a card
+ *      sitting there is never added twice. Undo takes that copy back out;
+ *      Rescan does that too and looks at the card again.
+ *      Not sure: it looks again, up to MAX_SCAN_ATTEMPTS bursts on the same
+ *      card, then shows the matches for a manual pick.
+ *
+ * Nothing captured is kept: frames and crops live only for the scan, and the
+ * result shows Scryfall's image of the match. Only the embedding and the OCR
+ * reads go to the server (scan.match). The debug view alone keeps the last
+ * flattened card, to show it.
  *
  * If the models can't load or the server has no image index yet, this calls
  * onUnavailable and the page falls back to the title-OCR scanner.
  */
 
+import Image from "next/image";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Button from "~/components/Button";
-import CameraFeed from "~/components/CameraFeed";
+import CameraFeed, { type FrameGrabber } from "~/components/CameraFeed";
 import ScanMatches, { type MatchOption } from "~/components/scan/ScanMatches";
 import { api } from "~/utils/api";
 import { isFeatureEnabled } from "~/utils/featureFlags";
 import { faceImageUrl, printingDetail } from "~/utils/recognition/display";
 import type { RecognitionCandidate } from "~/utils/recognition/fuse";
 import type { Quad } from "~/utils/recognition/geometry";
-import { AutoCaptureTracker, scaleQuad } from "~/utils/recognition/liveTracking";
+import { AutoCaptureTracker, scaleQuad, type RearmReason } from "~/utils/recognition/liveTracking";
 import { EMBED_MODEL } from "~/utils/recognition/model";
+import {
+  MAX_SCAN_ATTEMPTS,
+  bestOf,
+  captureMaxSide,
+  sureMatch,
+} from "~/utils/recognition/scanLoop";
 import type { Detection } from "~/utils/recognition/browser/detector";
 import { canvasToRgba, rgbaToDataUrl } from "~/utils/recognition/browser/frame";
 import {
@@ -38,16 +59,33 @@ import {
 import type { RgbaImage } from "~/utils/recognition/preprocess";
 import { classifyCameraError, type CameraErrorInfo } from "~/utils/scan/cameraError";
 import { cardGuideRect } from "~/utils/scan/cardGuide";
+import {
+  AUTO_ADD_KEY,
+  SOUND_KEY,
+  createLockSignal,
+  readToggle,
+  saveToggle,
+} from "~/utils/scan/lockSignal";
 import type { ScanCollection } from "~/utils/scan/useScanCollection";
 
 export type ScannerTiming = {
   /** Time between live detection ticks. */
   tickMs: number;
-  /** How long the outline must hold still before auto capture. */
+  /** How long the outline must hold still before a scan. */
   stableMs: number;
   /** Frames per capture burst, and the gap between them. */
   burstSize: number;
   burstGapMs: number;
+  /**
+   * Ticks in a row without a card that mean it was taken away. A little
+   * longer than a detector blip, so a card sitting there isn't scanned (and
+   * added) again because the outline flickered.
+   */
+  missesToLeave: number;
+  /** How long with no card outline before offering "Scan now". */
+  noCardMs: number;
+  /** How long the green flash shows. */
+  flashMs: number;
 };
 
 export const DEFAULT_TIMING: ScannerTiming = {
@@ -55,13 +93,13 @@ export const DEFAULT_TIMING: ScannerTiming = {
   stableMs: 800,
   burstSize: 3,
   burstGapMs: 120,
+  missesToLeave: 4,
+  noCardMs: 3000,
+  flashMs: 700,
 };
 
-/** Longest side of frames for live detection (small is fast) and for captures. */
+/** Longest side of frames for live detection (small is fast). Captures size themselves, see captureMaxSide. */
 const LIVE_MAX_SIDE = 640;
-const CAPTURE_MAX_SIDE = 1280;
-
-type Phase = "ready" | "reading" | "done" | "error";
 
 type Props = {
   scan: ScanCollection;
@@ -75,9 +113,65 @@ type Props = {
 /** One live detection as the detector reported it, in frame pixels. */
 type RawDetection = { quad: Quad; source: Detection["source"]; score: number };
 
+/**
+ * What's kept of a scan: the reads and the ranking, no pixels (the debug
+ * view alone keeps the flattened card, as a data URL).
+ */
+type KeptScan = Omit<RecognitionOutcome, "capture" | "orientedCard"> & {
+  id: number;
+  /** A card was found in the burst. */
+  found: boolean;
+  detection: Detection | null;
+  /** Debug only. */
+  flatCard: string | null;
+};
+
+type Lock = {
+  /** The scan it came from. */
+  scanId: number;
+  option: MatchOption;
+  /** This lock added a copy to the collection by itself. */
+  autoAdded: boolean;
+  /** ...and Undo took it back out. */
+  undone: boolean;
+};
+
 const CORNER_LABELS = ["TL", "TR", "BR", "BL"] as const;
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+const NO_CARD_NOTICE =
+  "Couldn't find a card in the picture. Hold it flat inside the frame with some background around it, and try again.";
+const NO_LOOK_NOTICE = "Couldn't get a good look at that card. Move it a little, or press Rescan.";
+
+function keepScan(outcome: RecognitionOutcome, id: number, debug: boolean): KeptScan {
+  const { capture } = outcome;
+  return {
+    ocr: outcome.ocr,
+    server: outcome.server,
+    result: outcome.result,
+    orientation: outcome.orientation,
+    orientationsTried: outcome.orientationsTried,
+    id,
+    found: capture !== null,
+    detection: capture?.detection ?? null,
+    flatCard: debug && capture ? rgbaToDataUrl(capture.best) : null,
+  };
+}
+
+function toOption(candidate: RecognitionCandidate): MatchOption {
+  return {
+    id: candidate.card.id,
+    name: candidate.card.name,
+    score: Math.min(1, candidate.score),
+    imageUrl: faceImageUrl(candidate.card, candidate.face),
+    detail: printingDetail(candidate.card) ?? undefined,
+  };
+}
+
+function canAdd(scan: ScanCollection): boolean {
+  return scan.auth === "signed-in" && scan.collectionName !== null;
+}
 
 /** How many candidates the debug panel breaks down signal by signal. */
 const DEBUG_SIGNAL_CANDIDATES = 3;
@@ -207,6 +301,84 @@ function QuadOverlay({
   );
 }
 
+/** The locked card over the bottom of the video: big name, what happened, Undo and Rescan. */
+function LockBanner({
+  lock,
+  scan,
+  onUndo,
+  onRescan,
+}: {
+  lock: Lock;
+  scan: ScanCollection;
+  onUndo: () => void;
+  onRescan: () => void;
+}) {
+  const { option } = lock;
+  let line: React.ReactNode;
+  if (lock.undone) {
+    line = scan.undoing
+      ? "Taking it back out..."
+      : scan.undoError
+        ? `Couldn't take it back out: ${scan.undoError}`
+        : "Took it back out. Pick the right card below, or rescan.";
+  } else if (lock.autoAdded) {
+    line = scan.adding ? (
+      `Adding to ${scan.collectionName ?? "your collection"}...`
+    ) : scan.addError ? (
+      `Couldn't add it: ${scan.addError}`
+    ) : scan.addedName ? (
+      <span role="status">
+        Added {scan.addedName}
+        {scan.collectionName ? ` to ${scan.collectionName}` : ""}.
+      </span>
+    ) : null;
+  } else {
+    // Not added by itself (auto add off, or nobody signed in): the matches
+    // below have the Add button, or the sign-in prompt, and say when it's added.
+    line = scan.addedName ? null : "Got it. Check it below.";
+  }
+
+  const showUndo = lock.autoAdded && !lock.undone && !scan.addError;
+  return (
+    <div
+      data-testid="lock-banner"
+      className="absolute inset-x-0 bottom-0 flex items-center gap-3 bg-black/75 p-3 text-white"
+    >
+      {option.imageUrl && (
+        <Image
+          src={option.imageUrl}
+          width={56}
+          height={78}
+          alt=""
+          className="hidden shrink-0 rounded sm:block"
+        />
+      )}
+      <div className="flex min-w-0 flex-1 flex-col gap-1">
+        <p data-testid="locked-name" className="truncate text-2xl font-bold leading-tight sm:text-3xl">
+          {option.name}
+        </p>
+        {option.detail && <p className="text-xs text-gray-300">{option.detail}</p>}
+        {line && <p className="text-sm text-green-300">{line}</p>}
+      </div>
+      <div className="flex shrink-0 flex-col gap-2">
+        {showUndo && (
+          <Button type="button" onClick={onUndo} disabled={scan.adding || scan.undoing}>
+            Undo
+          </Button>
+        )}
+        {lock.autoAdded && !lock.undone && scan.addError && (
+          <Button type="button" onClick={() => scan.add(option)} disabled={scan.adding}>
+            Try again
+          </Button>
+        )}
+        <Button type="button" onClick={onRescan} disabled={scan.adding || scan.undoing}>
+          Rescan
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 export default function AiScanner({
   scan,
   onUnavailable,
@@ -226,22 +398,67 @@ export default function AiScanner({
   const [cameraKey, setCameraKey] = useState(0);
   const [cameraError, setCameraError] = useState<CameraErrorInfo | null>(null);
   const [frameSize, setFrameSize] = useState<{ width: number; height: number } | null>(null);
-  const grabRef = useRef<(() => HTMLCanvasElement | null) | null>(null);
+  const frameSizeRef = useRef<{ width: number; height: number } | null>(null);
+  const grabRef = useRef<FrameGrabber | null>(null);
   const [hasFrames, setHasFrames] = useState(false);
 
   const [liveQuad, setLiveQuad] = useState<Quad | null>(null);
   const [liveRaw, setLiveRaw] = useState<RawDetection | null>(null);
-  const [locked, setLocked] = useState(false);
-  const [autoCapture, setAutoCapture] = useState(true);
+  const [outlineStill, setOutlineStill] = useState(false);
+  /** The live outline in video pixels, for sizing the next capture. */
+  const lastQuadRef = useRef<Quad | null>(null);
   const trackerRef = useRef<AutoCaptureTracker | null>(null);
-  if (!trackerRef.current) trackerRef.current = new AutoCaptureTracker({ stableMs: timing.stableMs });
+  if (!trackerRef.current) {
+    trackerRef.current = new AutoCaptureTracker({
+      stableMs: timing.stableMs,
+      missesToRearm: timing.missesToLeave,
+    });
+  }
 
-  const [phase, setPhase] = useState<Phase>("ready");
-  const [errorMessage, setErrorMessage] = useState("");
-  const [outcome, setOutcome] = useState<RecognitionOutcome | null>(null);
-  const [cardPreview, setCardPreview] = useState<string | null>(null);
+  const [autoAdd, setAutoAdd] = useState(() => readToggle(AUTO_ADD_KEY, true));
+  const [soundOn, setSoundOn] = useState(() => readToggle(SOUND_KEY, true));
+  const signalRef = useRef<ReturnType<typeof createLockSignal> | null>(null);
+  if (!signalRef.current) signalRef.current = createLockSignal();
+  const [flashId, setFlashId] = useState<number | null>(null);
+
+  const [reading, setReading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  /** Unsure looks so far at the card in view (0 when not retrying). */
+  const [attempt, setAttempt] = useState(0);
+  const [noCardLong, setNoCardLong] = useState(false);
+  /** The scan on screen: a lock, or the matches of an unsure one. */
+  const [view, setView] = useState<KeptScan | null>(null);
+  /** The latest scan, for the debug panel. */
+  const [lastScan, setLastScan] = useState<KeptScan | null>(null);
+  const [lock, setLock] = useState<Lock | null>(null);
+  const [listOpen, setListOpen] = useState(false);
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
+
   const capturingRef = useRef(false);
+  const scanIdRef = useRef(0);
+  const attemptsRef = useRef(0);
+  const bestRef = useRef<KeptScan | null>(null);
+  /** Why the tracker was armed when this card's first look started. */
+  const seriesReasonRef = useRef<RearmReason | "manual">("start");
+  /** The card that was last locked or added, while it may still be in view. */
+  const currentCardRef = useRef<string | null>(null);
+  const lockRef = useRef<Lock | null>(null);
+
+  // Callbacks from the detection loop read these, so they never go stale.
+  const scanRef = useRef(scan);
+  const autoAddRef = useRef(autoAdd);
+  const soundRef = useRef(soundOn);
+  useEffect(() => {
+    scanRef.current = scan;
+    autoAddRef.current = autoAdd;
+    soundRef.current = soundOn;
+  });
+
+  const updateLock = useCallback((next: Lock | null) => {
+    lockRef.current = next;
+    setLock(next);
+  }, []);
 
   // The server has to have an image index for this model, or there's nothing
   // to match against.
@@ -282,28 +499,75 @@ export default function AiScanner({
 
   const modelsReady = loadState.status === "ready";
 
-  const handleFrameSource = useCallback((grab: (() => HTMLCanvasElement | null) | null) => {
+  const handleFrameSource = useCallback((grab: FrameGrabber | null) => {
     grabRef.current = grab;
     setHasFrames(grab !== null);
   }, []);
 
-  const showOutcome = useCallback(
-    (next: RecognitionOutcome, mode: "auto" | "manual") => {
-      const nextTop = next.result?.candidates[0]?.card.id ?? null;
-      const currentTop = outcome?.result?.candidates[0]?.card.id ?? null;
-      // The same card auto-captured again (say it was nudged): keep what's on
-      // screen, including "Added", so nothing invites adding it twice.
-      if (mode === "auto" && nextTop !== null && nextTop === currentTop) {
-        setPhase("done");
+  const handleReady = useCallback((size: { width: number; height: number }) => {
+    frameSizeRef.current = size;
+    setFrameSize(size);
+  }, []);
+
+  // The flash shows for flashMs after each lock.
+  useEffect(() => {
+    if (flashId === null) return;
+    const id = setTimeout(() => setFlashId(null), timing.flashMs);
+    return () => clearTimeout(id);
+  }, [flashId, timing.flashMs]);
+
+  /** Sure about it: lock on, signal, and add it if allowed. */
+  const lockOnto = useCallback(
+    (kept: KeptScan, candidate: RecognitionCandidate, reason: RearmReason | "manual") => {
+      const option = toOption(candidate);
+      // The same card nudged in place (the outline jumped but never left):
+      // nothing new to add or announce.
+      if (reason === "swap" && currentCardRef.current === option.id) return;
+
+      const current = scanRef.current;
+      const autoAdded = autoAddRef.current && canAdd(current);
+      currentCardRef.current = option.id;
+      updateLock({ scanId: kept.id, option, autoAdded, undone: false });
+      setView(kept);
+      setSelectedCardId(option.id);
+      setListOpen(!autoAdded);
+      setNotice(null);
+      setFlashId(kept.id);
+      signalRef.current?.play({ sound: soundRef.current });
+      current.clearAdded();
+      if (autoAdded) current.add(option);
+    },
+    [updateLock],
+  );
+
+  /** Not sure (or no card in this burst): look again, or show what it found. */
+  const notSure = useCallback(
+    (kept: KeptScan, mode: "auto" | "manual") => {
+      attemptsRef.current += 1;
+      bestRef.current = bestOf(bestRef.current, kept);
+      if (mode === "auto" && attemptsRef.current < MAX_SCAN_ATTEMPTS) {
+        setAttempt(attemptsRef.current);
+        trackerRef.current?.arm("retry");
         return;
       }
-      setOutcome(next);
-      setSelectedCardId(nextTop);
-      setCardPreview(next.capture ? rgbaToDataUrl(next.capture.best) : null);
-      scan.clearAdded();
-      setPhase("done");
+
+      const shown = bestRef.current;
+      attemptsRef.current = 0;
+      bestRef.current = null;
+      setAttempt(0);
+      if (!shown.found) {
+        setNotice(mode === "manual" ? NO_CARD_NOTICE : NO_LOOK_NOTICE);
+        return;
+      }
+      updateLock(null);
+      currentCardRef.current = null;
+      setNotice(null);
+      setView(shown);
+      setListOpen(true);
+      setSelectedCardId(shown.result?.candidates[0]?.card.id ?? null);
+      scanRef.current.clearAdded();
     },
-    [outcome, scan],
+    [updateLock],
   );
 
   const startCapture = useCallback(
@@ -311,46 +575,69 @@ export default function AiScanner({
       if (capturingRef.current || !modelsReady) return;
       const grab = grabRef.current;
       if (!grab) return;
+      const tracker = trackerRef.current!;
+      const reason = mode === "manual" ? "manual" : tracker.rearmedBy;
+      if (reason !== "retry") {
+        // A new card (or a fresh start): forget the looks at the last one.
+        attemptsRef.current = 0;
+        bestRef.current = null;
+        seriesReasonRef.current = reason;
+        setAttempt(0);
+      }
       capturingRef.current = true;
-      trackerRef.current?.disarm();
-      setPhase("reading");
-      setErrorMessage("");
+      tracker.disarm();
+      setReading(true);
+      setErrorMessage(null);
 
       try {
+        const video = frameSizeRef.current;
+        const maxSide = video
+          ? captureMaxSide(lastQuadRef.current, video.width, video.height)
+          : captureMaxSide(null, 0, 0);
         const frames: RgbaImage[] = [];
         for (let i = 0; i < timing.burstSize; i++) {
           if (i > 0) await sleep(timing.burstGapMs);
-          const canvas = grab();
-          if (canvas) frames.push(canvasToRgba(canvas, CAPTURE_MAX_SIDE));
+          const canvas = grab(maxSide);
+          if (canvas) frames.push(canvasToRgba(canvas, maxSide));
         }
-        const next = await recognize(frames, { allowGuideFallback: mode === "manual" });
-        showOutcome(next, mode);
+        const outcome = await recognize(frames, { allowGuideFallback: mode === "manual" });
+        const kept = keepScan(outcome, ++scanIdRef.current, debug);
+        setLastScan(kept);
+        const sure = sureMatch(outcome.result);
+        if (sure) {
+          attemptsRef.current = 0;
+          bestRef.current = null;
+          setAttempt(0);
+          lockOnto(kept, sure, seriesReasonRef.current);
+        } else {
+          notSure(kept, mode);
+        }
       } catch (error) {
         console.error(error);
         setErrorMessage(error instanceof Error ? error.message : "Something went wrong.");
-        setPhase("error");
       } finally {
         capturingRef.current = false;
+        setReading(false);
       }
     },
-    [modelsReady, recognize, showOutcome, timing.burstGapMs, timing.burstSize],
+    [modelsReady, recognize, timing.burstGapMs, timing.burstSize, debug, lockOnto, notSure],
   );
 
-  // The loop below runs on an interval; read the latest callback and toggle
-  // through refs so it doesn't restart on every render.
+  // The loop below runs on an interval; read the latest callback through a
+  // ref so it doesn't restart on every render.
   const startCaptureRef = useRef(startCapture);
-  const autoCaptureRef = useRef(autoCapture);
   useEffect(() => {
     startCaptureRef.current = startCapture;
-    autoCaptureRef.current = autoCapture;
-  }, [startCapture, autoCapture]);
+  }, [startCapture]);
 
   // Live detection: about 4 times a second, skipping a tick if the last one
-  // (or a capture) is still running.
+  // (or a capture) is still running. A still outline starts a scan.
   useEffect(() => {
     if (!modelsReady || !hasFrames) return;
     let busy = false;
     let stopped = false;
+    let lastSeen = Date.now();
+    let longGone = false;
 
     const tick = async () => {
       if (busy || capturingRef.current) return;
@@ -358,26 +645,35 @@ export default function AiScanner({
       if (!grab) return;
       busy = true;
       try {
-        const canvas = grab();
+        const canvas = grab(LIVE_MAX_SIDE);
         if (!canvas) return;
         const frame = canvasToRgba(canvas, LIVE_MAX_SIDE);
         const detection = await detect(frame);
         if (stopped) return;
+        const video = frameSizeRef.current ?? { width: canvas.width, height: canvas.height };
+        const toVideo = video.width / frame.width;
         const quad =
-          detection && detection.source !== "guide"
-            ? scaleQuad(detection.quad, canvas.width / frame.width)
-            : null;
-        const update = trackerRef.current!.update(quad, canvas.width, canvas.height, Date.now());
+          detection && detection.source !== "guide" ? scaleQuad(detection.quad, toVideo) : null;
+        const now = Date.now();
+        const update = trackerRef.current!.update(quad, video.width, video.height, now);
+        lastQuadRef.current = quad;
         setLiveQuad(quad);
         setLiveRaw(
           detection && {
-            quad: scaleQuad(detection.quad, canvas.width / frame.width),
+            quad: scaleQuad(detection.quad, toVideo),
             source: detection.source,
             score: detection.score,
           },
         );
-        setLocked(update.locked);
-        if (update.fire && autoCaptureRef.current) void startCaptureRef.current("auto");
+        setOutlineStill(update.locked);
+
+        if (quad) lastSeen = now;
+        const gone = !quad && now - lastSeen >= timing.noCardMs;
+        if (gone !== longGone) {
+          longGone = gone;
+          setNoCardLong(gone);
+        }
+        if (update.fire) void startCaptureRef.current("auto");
       } catch (error) {
         console.error("Live card detection failed", error);
       } finally {
@@ -390,7 +686,7 @@ export default function AiScanner({
       stopped = true;
       clearInterval(id);
     };
-  }, [modelsReady, hasFrames, detect, timing.tickMs]);
+  }, [modelsReady, hasFrames, detect, timing.tickMs, timing.noCardMs]);
 
   const handleCameraError = useCallback((error: unknown) => {
     console.error(error);
@@ -400,29 +696,69 @@ export default function AiScanner({
   const retryCamera = () => {
     setCameraError(null);
     setFrameSize(null);
+    frameSizeRef.current = null;
     setCameraKey((key) => key + 1);
   };
 
-  const scanNext = () => {
-    setPhase("ready");
-    setOutcome(null);
-    setSelectedCardId(null);
-    setCardPreview(null);
-    scan.clearAdded();
-    trackerRef.current?.arm();
+  /** The last copy added is this lock's own, so Undo takes back the right one. */
+  const lockOwnsLastAdd = (current: Lock) => {
+    const last = scan.added[scan.added.length - 1];
+    return current.autoAdded && !current.undone && last?.cardId === current.option.id;
   };
 
-  const result = outcome?.result ?? null;
-  const ocrName = outcome?.ocr?.name ?? null;
-  const matchOptions: MatchOption[] = (result?.candidates ?? []).map((candidate) => ({
-    id: candidate.card.id,
-    name: candidate.card.name,
-    score: Math.min(1, candidate.score),
-    imageUrl: faceImageUrl(candidate.card, candidate.face),
-    detail: printingDetail(candidate.card) ?? undefined,
-  }));
+  const undo = () => {
+    const current = lockRef.current;
+    if (!current || !lockOwnsLastAdd(current)) return;
+    scan.undo();
+    currentCardRef.current = null;
+    updateLock({ ...current, undone: true });
+    setListOpen(true);
+  };
 
-  const busy = phase === "reading";
+  /** Clear the lock (taking its copy back out) and look at the card in view again. */
+  const rescan = () => {
+    const current = lockRef.current;
+    if (current && lockOwnsLastAdd(current)) scan.undo();
+    updateLock(null);
+    currentCardRef.current = null;
+    attemptsRef.current = 0;
+    bestRef.current = null;
+    setAttempt(0);
+    setView(null);
+    setListOpen(false);
+    setSelectedCardId(null);
+    setNotice(null);
+    setErrorMessage(null);
+    scan.clearAdded();
+    trackerRef.current?.arm();
+    // No outline to wait for: scan what's in front of the camera now.
+    if (!lastQuadRef.current) void startCapture("manual");
+  };
+
+  /** After a manual add, "Scan next card": clear the result and wait for the next card. */
+  const scanNext = () => {
+    updateLock(null);
+    setView(null);
+    setListOpen(false);
+    setSelectedCardId(null);
+    scan.clearAdded();
+  };
+
+  const toggleAutoAdd = (on: boolean) => {
+    setAutoAdd(on);
+    saveToggle(AUTO_ADD_KEY, on);
+  };
+
+  const toggleSound = (on: boolean) => {
+    setSoundOn(on);
+    saveToggle(SOUND_KEY, on);
+    if (on) signalRef.current?.unlock();
+  };
+
+  const result = view?.result ?? null;
+  const ocrName = view?.ocr?.name ?? null;
+  const matchOptions: MatchOption[] = (result?.candidates ?? []).map(toOption);
+
   const loadingProgress = loadState.status === "loading" ? loadState.progress : null;
 
   if (!indexReady) {
@@ -430,7 +766,8 @@ export default function AiScanner({
   }
 
   return (
-    <>
+    // Browsers only allow sound after a tap, so any tap here unlocks the chime.
+    <div className="flex flex-col gap-4" onPointerDown={() => soundOn && signalRef.current?.unlock()}>
       {(loadState.status === "idle" || loadingProgress !== null) && (
         <div role="status" className="flex flex-col gap-1 text-sm">
           <span>
@@ -451,53 +788,106 @@ export default function AiScanner({
         <div className="flex flex-col items-center gap-2">
           <CameraFeed
             key={cameraKey}
-            onCapture={() => void startCapture("manual")}
+            showCaptureButton={false}
             onError={handleCameraError}
-            onReady={setFrameSize}
+            onReady={handleReady}
             onFrameSource={handleFrameSource}
-            overlay={frameSize && (
-                <QuadOverlay
-                  frame={frameSize}
-                  quad={liveQuad}
-                  locked={locked}
-                  raw={debug ? liveRaw : undefined}
-                />
-              )}
-            disabled={busy || !modelsReady}
-            captureLabel={busy ? "Working..." : "Capture"}
+            overlay={
+              frameSize && (
+                <>
+                  <QuadOverlay
+                    frame={frameSize}
+                    quad={liveQuad}
+                    locked={outlineStill}
+                    raw={debug ? liveRaw : undefined}
+                  />
+                  {flashId !== null && (
+                    <div
+                      key={flashId}
+                      data-testid="lock-flash"
+                      aria-hidden="true"
+                      className="pointer-events-none absolute inset-0 rounded-lg border-8 border-green-500 bg-green-500/20 motion-safe:animate-scan-lock"
+                    />
+                  )}
+                  {lock && <LockBanner lock={lock} scan={scan} onUndo={undo} onRescan={rescan} />}
+                </>
+              )
+            }
           />
-          <label className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              checked={autoCapture}
-              onChange={(event) => setAutoCapture(event.target.checked)}
-            />
-            Auto capture
-          </label>
+          <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-sm">
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={autoAdd}
+                onChange={(event) => toggleAutoAdd(event.target.checked)}
+              />
+              Auto add when sure
+            </label>
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={soundOn}
+                onChange={(event) => toggleSound(event.target.checked)}
+              />
+              Sound
+            </label>
+          </div>
         </div>
       )}
 
-      {phase === "reading" && <p>Reading the card...</p>}
-      {phase === "error" && <p className="text-red-400">Scanning failed: {errorMessage}</p>}
-
-      {phase === "done" && outcome && !outcome.capture && (
-        <p className="text-yellow-300">
-          Couldn&apos;t find a card in the picture. Hold it flat inside the frame with some background
-          around it, and try again.
+      {reading && <p>Reading the card...</p>}
+      {!reading && attempt > 0 && (
+        <p className="text-sm text-gray-400">
+          Not sure yet, taking another look ({attempt + 1} of {MAX_SCAN_ATTEMPTS}). Hold it still.
         </p>
       )}
-
-      {phase === "done" && outcome?.capture && matchOptions.length === 0 && (
-        <p className="text-yellow-300">
-          Couldn&apos;t match that card. Try again with better light or the card a little closer.
-        </p>
+      {errorMessage && (
+        <div className="flex flex-wrap items-center gap-3">
+          <p className="text-red-400">Scanning failed: {errorMessage}</p>
+          <Button type="button" onClick={rescan}>
+            Rescan
+          </Button>
+        </div>
+      )}
+      {notice && (
+        <div className="flex flex-wrap items-center gap-3">
+          <p className="text-yellow-300">{notice}</p>
+          <Button type="button" onClick={rescan}>
+            Rescan
+          </Button>
+        </div>
       )}
 
-      {matchOptions.length > 0 && (
-        <>
-          <p className="text-sm text-gray-400">
-            {result?.confident ? "Pretty sure about this one." : "Not sure about this one, check the matches."}
+      {modelsReady && noCardLong && !reading && (
+        <div className="flex flex-wrap items-center gap-3 text-sm text-gray-400">
+          <span>Can&apos;t see a card outline. Hold it flat with some background around it, or</span>
+          <Button type="button" onClick={() => void startCapture("manual")}>
+            Scan now
+          </Button>
+        </div>
+      )}
+
+      {listOpen && view && !lock && matchOptions.length === 0 && (
+        <div className="flex flex-wrap items-center gap-3">
+          <p className="text-yellow-300">
+            Couldn&apos;t match that card. Try again with better light or the card a little closer.
           </p>
+          <Button type="button" onClick={rescan}>
+            Rescan
+          </Button>
+        </div>
+      )}
+
+      {listOpen && matchOptions.length > 0 && (
+        <>
+          {!lock && (
+            <div className="flex flex-wrap items-center gap-3">
+              <p className="text-sm text-gray-400">Not sure about this one. Pick the right card, or rescan.</p>
+              <Button type="button" onClick={rescan}>
+                Rescan
+              </Button>
+            </div>
+          )}
           <ScanMatches
             query={ocrName ?? ""}
             heading={ocrName ? undefined : "Best matches"}
@@ -512,27 +902,33 @@ export default function AiScanner({
             collectionName={scan.collectionName}
             onAdd={() => {
               const match = matchOptions.find((option) => option.id === selectedCardId);
-              if (match) scan.add(match);
+              if (!match) return;
+              currentCardRef.current = match.id;
+              // After an Undo, the banner follows the card picked instead.
+              if (lockRef.current) {
+                updateLock({ ...lockRef.current, option: match, autoAdded: false, undone: false });
+              }
+              scan.add(match);
             }}
             adding={scan.adding}
-            addedName={scan.addedName}
+            addedName={lock?.autoAdded && !lock.undone ? null : scan.addedName}
             onScanNext={scanNext}
             error={scan.addError}
           />
         </>
       )}
 
-      {debug && outcome && (
+      {debug && lastScan && (
         <details className="text-sm text-gray-400">
           <summary className="cursor-pointer">Debug: what the scanner saw</summary>
           <div className="mt-2 flex flex-col gap-2">
-            {cardPreview && (
+            {lastScan.flatCard && (
               // A data URL from our own canvas, so next/image adds nothing here.
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={cardPreview} alt="Flattened card sent to the matcher" className="max-w-xs" />
+              <img src={lastScan.flatCard} alt="Flattened card sent to the matcher" className="max-w-xs" />
             )}
             <p>
-              Detector: <code>{outcome.capture?.detection.source ?? "no card"}</code>
+              Detector: <code>{lastScan.detection?.source ?? "no card"}</code>
               {loadState.status === "ready" && (
                 <>
                   {" "}
@@ -541,9 +937,12 @@ export default function AiScanner({
                 </>
               )}
             </p>
-            {outcome.server && (
+            <p>
+              Ranking: <code>{lastScan.result?.confident ? "confident" : "not sure"}</code>
+            </p>
+            {lastScan.server && (
               <ol className="list-decimal pl-5">
-                {outcome.server.matches.slice(0, 5).map((match) => (
+                {lastScan.server.matches.slice(0, 5).map((match) => (
                   <li key={`${match.card.id}:${match.face}`}>
                     {match.card.name} ({printingDetail(match.card) ?? "?"}):{" "}
                     <code>{match.similarity.toFixed(3)}</code>
@@ -551,27 +950,27 @@ export default function AiScanner({
                 ))}
               </ol>
             )}
-            {result?.candidates[0] && (
+            {lastScan.result?.candidates[0] && (
               <p>
-                Top pick: <code>{result.candidates[0].score.toFixed(3)}</code> (
-                {result.candidates[0].reasons.join(", ")})
+                Top pick: <code>{lastScan.result.candidates[0].score.toFixed(3)}</code> (
+                {lastScan.result.candidates[0].reasons.join(", ")})
               </p>
             )}
-            {result && result.candidates.length > 0 && (
-              <SignalBreakdown candidates={result.candidates.slice(0, DEBUG_SIGNAL_CANDIDATES)} />
+            {lastScan.result && lastScan.result.candidates.length > 0 && (
+              <SignalBreakdown candidates={lastScan.result.candidates.slice(0, DEBUG_SIGNAL_CANDIDATES)} />
             )}
             <p>
-              Raw title OCR: <code>{JSON.stringify(outcome.ocr?.rawTitle ?? "")}</code>
+              Raw title OCR: <code>{JSON.stringify(lastScan.ocr?.rawTitle ?? "")}</code>
             </p>
             <p>
-              Raw collector OCR: <code>{JSON.stringify(outcome.ocr?.rawCollector ?? "")}</code>
+              Raw collector OCR: <code>{JSON.stringify(lastScan.ocr?.rawCollector ?? "")}</code>
             </p>
             <p>
-              Collector read: <code>{JSON.stringify(outcome.ocr?.collector ?? null)}</code>
+              Collector read: <code>{JSON.stringify(lastScan.ocr?.collector ?? null)}</code>
             </p>
           </div>
         </details>
       )}
-    </>
+    </div>
   );
 }

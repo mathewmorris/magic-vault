@@ -20,7 +20,8 @@
  *
  * With the aiScan feature flag on, the page uses the AI scanner instead
  * (~/components/scan/AiScanner: card detection, image embeddings and OCR of
- * the name and collector number), and falls back to this flow if that can't
+ * the name and collector number, hands free: it adds a card by itself once
+ * it's sure), and falls back to this flow if that can't
  * run. Both share the collection picker, adding, undo and the session tally
  * (~/utils/scan/useScanCollection).
  */
@@ -164,7 +165,7 @@ function Scanner() {
         <h1 className="text-2xl font-semibold">Scan cards</h1>
         <p className="text-sm text-gray-400">
           {mode === "ai"
-            ? "Hold a card up to the camera. It captures by itself once the outline locks on, or press Capture."
+            ? "Hold a card up to the camera and keep it still. Once it's sure, it buzzes, chimes and adds the card, then waits for the next one."
             : "Fit the card inside the outline with its name in the pink box, then capture."}
         </p>
       </div>

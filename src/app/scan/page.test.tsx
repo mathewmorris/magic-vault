@@ -79,7 +79,7 @@ describe("/scan", () => {
 
     render(<ScanPage />);
 
-    expect(screen.getByText(/once the outline locks on/)).toBeTruthy();
+    expect(screen.getByText(/Once it.s sure, it buzzes/)).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Fake AI scanner" }));
 
     expect(screen.getByRole("status").textContent).toBe("No image index yet.");
