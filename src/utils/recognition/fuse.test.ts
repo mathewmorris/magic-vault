@@ -452,6 +452,22 @@ describe("signals", () => {
       expect(withColour.candidates[0]!.reasons).toContain("rarity matches");
     });
 
+    test("the symbol colour is ignored for pre-2003 frames, where the symbol sits elsewhere", () => {
+      const oldCommon = { ...boltCommon, id: "bolt-old-common", frame: "1997" } as typeof boltCommon;
+      const oldUncommon = { ...boltUncommon, id: "bolt-old-uncommon", frame: "1997" } as typeof boltUncommon;
+      const matches = [match(oldUncommon, 0.841), match(oldCommon, 0.839), match(blast, 0.4)];
+      const result = rankRecognition({
+        matches,
+        printing: null,
+        ocrName: "Lightning Bolt",
+        collector: null,
+        rarityColour: { value: "common", quality: 0.9 },
+      });
+
+      expect(result.candidates[0]!.card.id).toBe("bolt-old-uncommon");
+      expect(signal(result.candidates[0]!, "rarity")).toHaveLength(0);
+    });
+
     test("a clean mythic read doesn't let a common win on a hair of similarity", () => {
       const result = rankRecognition({
         matches: [match(boltCommon, 0.82), match(boltMythic, 0.8)],

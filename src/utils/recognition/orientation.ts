@@ -28,6 +28,7 @@
  */
 
 import type { ScanMatch, ScanMatchResult } from "~/server/api/routers/scan";
+import { sampleBorder, sampleRarityColour } from "./colourCues";
 import { rankRecognition, type RecognitionResult } from "./fuse";
 import { isSideways, rotateImage, type Orientation, type Quad } from "./geometry";
 import type { CardOcrResult } from "./ocr";
@@ -153,12 +154,29 @@ export type OrientedRecognition = {
   result: RecognitionResult;
 };
 
-function rank(server: ScanMatchResult, ocr: CardOcrResult | null, orientation: Orientation): RecognitionResult {
+/**
+ * The colour cues read regions laid out for a portrait card (border strips,
+ * the set symbol at the right end of the type line), so they're only read
+ * for 0 and 180. A landscape turn gets no colour evidence rather than wrong
+ * evidence.
+ */
+export function readColourCues(card: RgbaImage, orientation: Orientation) {
+  if (orientation === 90 || orientation === 270) return { border: null, rarityColour: null };
+  return { border: sampleBorder(card), rarityColour: sampleRarityColour(card) };
+}
+
+function rank(
+  server: ScanMatchResult,
+  ocr: CardOcrResult | null,
+  orientation: Orientation,
+  card: RgbaImage,
+): RecognitionResult {
   return rankRecognition({
     matches: server.matches,
     printing: server.printing,
     ocrName: trustedOcrName(ocr?.name, server.matches, orientation),
     collector: ocr?.collector ?? null,
+    ...readColourCues(card, orientation),
   });
 }
 
@@ -187,7 +205,7 @@ export async function recognizeOriented(
   const [embedding, uprightOcr] = await Promise.all([deps.embedBurst(capture.cards), deps.ocr(capture.best)]);
   const uprightPrinting = printingQuery(uprightOcr);
   const uprightServer = await deps.match({ embedding, printing: uprightPrinting });
-  const uprightResult = rank(uprightServer, uprightOcr, 0);
+  const uprightResult = rank(uprightServer, uprightOcr, 0, capture.best);
   const upright: OrientedRecognition = {
     orientation: 0,
     orientationsTried: [0],
@@ -229,5 +247,5 @@ export async function recognizeOriented(
           variantSimilarities: server.variantSimilarities,
         };
   }
-  return { orientation, orientationsTried, card, ocr, server: final, result: rank(final, ocr, orientation) };
+  return { orientation, orientationsTried, card, ocr, server: final, result: rank(final, ocr, orientation, card) };
 }

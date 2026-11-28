@@ -8,6 +8,7 @@ import {
   MAX_ORIENTATION_VARIANTS,
   needsOrientationRetry,
   orientationCandidates,
+  readColourCues,
   recognizeOriented,
   topSimilarity,
   trustedOcrName,
@@ -360,5 +361,13 @@ describe("recognizeOriented", () => {
     const out = await recognizeOriented({ cards: burst, best, quad: cardQuad(0) }, f.deps);
     expect(out.result.candidates[0]!.card.id).toBe("fire-ice");
     expect(out.result.candidates.every((c) => c.nameScore === null)).toBe(true);
+  });
+});
+
+describe("readColourCues", () => {
+  it("skips the colour cues for landscape turns, whose regions don't line up", () => {
+    const landscape = patterned(680, 488);
+    expect(readColourCues(landscape, 90)).toEqual({ border: null, rarityColour: null });
+    expect(readColourCues(landscape, 270)).toEqual({ border: null, rarityColour: null });
   });
 });

@@ -228,7 +228,10 @@ export type RecognitionInput = {
  * Card fields this file reads that ScanCard may not have yet. Read through
  * this narrow type so it compiles before and after they're selected.
  */
-type CueFields = { border_color?: string | null; finishes?: unknown };
+type CueFields = { border_color?: string | null; finishes?: unknown; frame?: string | null };
+
+/** Scryfall frame values from before the 2003 frame moved the set symbol to the type line. */
+const OLD_FRAMES = new Set(["1993", "1997"]);
 
 type Face = { name?: string };
 
@@ -349,7 +352,9 @@ function rarityEvidence(card: ScanCard, input: RecognitionInput): SignalEvidence
 
   // The set symbol's colour. It can't express special/bonus, so those cards
   // get no evidence from it.
-  const colour = input.rarityColour;
+  // Frames before 8th Edition put the symbol elsewhere (or have none), so a
+  // colour read off the modern symbol spot means nothing for them.
+  const colour = OLD_FRAMES.has((card as ScanCard & CueFields).frame ?? "") ? null : input.rarityColour;
   if (colour && RARITY_LADDER.includes(actual)) {
     const steps = Math.abs(RARITY_LADDER.indexOf(colour.value) - RARITY_LADDER.indexOf(actual));
     const agreement = steps === 0 ? 1 : steps === 1 ? RARITY_NEAR_MISS : -1;
