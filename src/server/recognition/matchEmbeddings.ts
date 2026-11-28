@@ -116,29 +116,43 @@ export function normalizeCollectorNumber(value: string): string {
 }
 
 /**
- * Exact printing lookup. Set codes match case-insensitively (Scryfall stores
- * them lowercase, so the input is lowercased and the (set, collector_number)
- * index still applies); collector numbers match after trimming and dropping
- * leading zeros on both sides. If several rows share a set and number (other
- * languages), English wins, then the lowest id.
+ * Printing lookup by what the collector line and title bar read. Set codes
+ * match case-insensitively (Scryfall stores them lowercase, so the input is
+ * lowercased and the (set, collector_number) index still applies); collector
+ * numbers match after trimming and dropping leading zeros on both sides.
+ *
+ * With a name, a card in the set with that name (either face of a double
+ * faced card) wins over the exact number: OCR drops the thin edge digits of
+ * a collector number ("87" for "187") far more often than it misreads a
+ * whole name, and a set rarely prints two cards with one name. Among those,
+ * the one whose number holds the digits read wins. Without a name match it's
+ * the exact number, as before. Ties: English first, then the lowest id.
  */
 export function buildPrintingSql(): string {
+  const number = `regexp_replace(btrim("collector_number"), '^0+(?=.)', '')`;
+  const named = `($3::text IS NOT NULL AND (lower("name") = $3 OR left(lower("name"), length($3) + 4) = $3 || ' // '))`;
   return `
 SELECT "id"
 FROM "Card"
 WHERE "set" = $1
-  AND regexp_replace(btrim("collector_number"), '^0+(?=.)', '') = $2
-ORDER BY ("lang" = 'en') DESC NULLS LAST, "id"
+  AND (${number} = $2 OR ${named})
+ORDER BY ${named} DESC,
+  (${number} = $2) DESC,
+  (strpos(${number}, $2) > 0) DESC,
+  ("lang" = 'en') DESC NULLS LAST,
+  "id"
 LIMIT 1`.trim();
 }
 
 export async function findPrinting(
   exec: SqlExecutor,
-  input: { set: string; collectorNumber: string },
+  input: { set: string; collectorNumber: string; name?: string | null },
 ): Promise<{ id: string } | null> {
   const set = input.set.trim().toLowerCase();
   const collectorNumber = normalizeCollectorNumber(input.collectorNumber);
   if (!set || !collectorNumber) return null;
-  const rows = await exec<{ id: string }>(buildPrintingSql(), [set, collectorNumber]);
+  const trimmedName = input.name?.trim().toLowerCase();
+  const name = trimmedName ? trimmedName : null;
+  const rows = await exec<{ id: string }>(buildPrintingSql(), [set, collectorNumber, name]);
   return rows[0] ? { id: rows[0].id } : null;
 }

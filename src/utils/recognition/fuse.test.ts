@@ -287,6 +287,36 @@ describe("rankRecognition", () => {
   });
 });
 
+describe("text only, no card pictures indexed", () => {
+  const boltClb = card("bolt-clb", "Lightning Bolt", "clb", "187", { rarity: "common" });
+
+  test("name and set read, number clipped to a piece of the real one: confident", () => {
+    // What the browser check read: "87/36" off "187/361".
+    const result = rankRecognition({
+      matches: [],
+      printing: boltClb,
+      ocrName: "Lightning Bolt",
+      collector: collector("clb", "87"),
+    });
+
+    expect(result.candidates.map((c) => c.card.id)).toEqual(["bolt-clb"]);
+    expect(signal(result.candidates[0]!, "collector")).toEqual([expect.objectContaining({ agreement: 0.6 })]);
+    expect(result.confident).toBe(true);
+  });
+
+  test("a number that isn't a piece of the printing's still doesn't count", () => {
+    const result = rankRecognition({
+      matches: [],
+      printing: boltClb,
+      ocrName: "Lightning Bolt",
+      collector: collector("clb", "92"),
+    });
+
+    expect(signal(result.candidates[0]!, "collector")).toEqual([expect.objectContaining({ agreement: 0.2 })]);
+    expect(result.confident).toBe(false);
+  });
+});
+
 describe("faceName", () => {
   test("uses the face's own name, falling back to the card name", () => {
     expect(faceName(delver, 1)).toBe("Insectile Aberration");

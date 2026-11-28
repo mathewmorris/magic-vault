@@ -464,6 +464,20 @@ function collectorEvidence(
     return [evidence("collector", 1, COLLECTOR_QUALITY_FULL, `${read} matches${lang}`)];
   }
   if (sameCode(card.set, setCode)) {
+    // OCR drops thin edge digits ("87" off "187") but doesn't add any, so a
+    // number that's a piece of this card's says no more or less than no number.
+    const readNumber = normalizeNumber(collector.collectorNumber);
+    const cardNumber = normalizeNumber(card.collector_number);
+    if (readNumber && cardNumber && cardNumber.includes(readNumber)) {
+      return [
+        evidence(
+          "collector",
+          COLLECTOR_SET_AGREEMENT,
+          COLLECTOR_QUALITY_SET,
+          `${read}: set matches, number partly read (${cardNumber})${lang}`,
+        ),
+      ];
+    }
     return hasNumber
       ? [
           evidence(

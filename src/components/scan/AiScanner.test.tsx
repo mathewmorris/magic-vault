@@ -406,7 +406,7 @@ describe("AiScanner", () => {
       embedding: [0.6, 0.8],
       modelId: EMBED_MODEL.id,
       limit: 20,
-      printing: { set: "m11", collectorNumber: "149" },
+      printing: { set: "m11", collectorNumber: "149", name: "Lightning Bolt" },
     });
   });
 

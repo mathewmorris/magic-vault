@@ -168,7 +168,7 @@ describe("scan procedures", () => {
       const printingCall = prismaMock.$queryRawUnsafe.mock.calls.find(([sql]) =>
         String(sql).includes('FROM "Card"'),
       );
-      expect(printingCall?.slice(1)).toEqual(["m21", "7"]);
+      expect(printingCall?.slice(1)).toEqual(["m21", "7", null]);
     });
 
     test("returns printing null when OCR's printing isn't in the database", async () => {

@@ -95,6 +95,8 @@ export const scanRouter = createTRPCRouter({
           .object({
             set: z.string().trim().min(1).max(10),
             collectorNumber: z.string().trim().min(1).max(16),
+            /** The name read off the title bar, to catch a clipped number. */
+            name: z.string().trim().min(1).max(200).optional(),
           })
           .optional(),
       }),

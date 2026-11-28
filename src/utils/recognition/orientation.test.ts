@@ -282,7 +282,7 @@ describe("recognizeOriented", () => {
     expect(f.calls).toEqual([
       { embedding: [2], printing: undefined },
       { embedding: [2], alternates: [[101]], printing: undefined },
-      { embedding: [101], printing: { set: "M11", collectorNumber: "149" } },
+      { embedding: [101], printing: { set: "M11", collectorNumber: "149", name: "Lightning Bolt" } },
     ]);
     expect(out.server.printing).toEqual(bolt);
     expect(out.server.variant).toBe(1);

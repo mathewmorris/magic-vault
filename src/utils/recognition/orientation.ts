@@ -116,13 +116,17 @@ export function trustedOcrName(
   return ocrName;
 }
 
-export type PrintingQuery = { set: string; collectorNumber: string };
+export type PrintingQuery = { set: string; collectorNumber: string; name?: string };
 
 export function printingQuery(ocr: CardOcrResult | null): PrintingQuery | undefined {
   const collector = ocr?.collector ?? null;
-  return collector?.setCode && collector.collectorNumber
-    ? { set: collector.setCode, collectorNumber: collector.collectorNumber }
-    : undefined;
+  if (!collector?.setCode || !collector.collectorNumber) return undefined;
+  const name = ocr?.name?.trim();
+  return {
+    set: collector.setCode,
+    collectorNumber: collector.collectorNumber,
+    ...(name ? { name: name.slice(0, 200) } : {}),
+  };
 }
 
 export type OrientedMatchInput = {
@@ -188,7 +192,8 @@ function samePrinting(a: PrintingQuery | undefined, b: PrintingQuery | undefined
     !!a &&
     !!b &&
     a.set.trim().toLowerCase() === b.set.trim().toLowerCase() &&
-    a.collectorNumber.trim() === b.collectorNumber.trim()
+    a.collectorNumber.trim() === b.collectorNumber.trim() &&
+    (a.name ?? "").trim().toLowerCase() === (b.name ?? "").trim().toLowerCase()
   );
 }
 
