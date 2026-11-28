@@ -318,22 +318,40 @@ describe("signals", () => {
     expect(signal(byId(result, "blast"), "collector")[0]!.agreement).toBeLessThan(0);
   });
 
-  test("a strong image match on its own is no longer enough to be confident", () => {
+  test("a very strong image match on its own is enough when no reprint is in the running", () => {
     const imageOnly = rankRecognition({
       matches: [match(shock, 0.9), match(blast, 0.4)],
       printing: null,
       ocrName: null,
       collector: null,
     });
+
+    expect(imageOnly.candidates[0]!.card.id).toBe("shock");
+    expect(imageOnly.confident).toBe(true);
+  });
+
+  test("a strong image match on its own isn't enough when a reprint shares the art", () => {
+    const imageOnly = rankRecognition({
+      matches: [match(boltM11, 0.9), match(bolt2xm, 0.7)],
+      printing: null,
+      ocrName: null,
+      collector: null,
+    });
     const withName = rankRecognition({
-      matches: [match(shock, 0.9), match(blast, 0.4)],
+      matches: [match(shock, 0.7), match(blast, 0.4)],
       printing: null,
       ocrName: "Shock",
       collector: null,
     });
+    const imageMiddling = rankRecognition({
+      matches: [match(shock, 0.7), match(blast, 0.4)],
+      printing: null,
+      ocrName: null,
+      collector: null,
+    });
 
-    expect(imageOnly.candidates[0]!.card.id).toBe("shock");
     expect(imageOnly.confident).toBe(false);
+    expect(imageMiddling.confident).toBe(false);
     expect(withName.confident).toBe(true);
   });
 
@@ -571,7 +589,7 @@ describe("signals", () => {
   });
 
   describe("OCR name confidence", () => {
-    const matches = [match(shock, 0.88), match(blast, 0.41)];
+    const matches = [match(shock, 0.75), match(blast, 0.41)];
 
     test("a confident read is the same as no confidence given", () => {
       const absent = rankRecognition({ matches, printing: null, ocrName: "Shock", collector: null });

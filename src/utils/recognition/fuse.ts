@@ -62,10 +62,12 @@
  *      down a little, so they never count toward the two, but any of them
  *      can veto; or
  *   b. it's the exact printing the collector line names and its name agrees
- *      (OCR'd name or the top image match). That path is unchanged.
- *
- * So a strong image match alone is no longer enough: something read off the
- * card (name or collector line) has to back it up.
+ *      (OCR'd name or the top image match). That path is unchanged; or
+ *   c. the image alone is very sure (similarity >= IMAGE_ALONE_SIMILARITY,
+ *      lead >= IMAGE_ALONE_MARGIN) and no other candidate is a printing of
+ *      the same card. That keeps old cards with no collector line, and scans
+ *      where OCR read nothing, from always asking, while reprints that share
+ *      art still need something read off the card.
  *
  * The constants are first guesses, picked by reasoning about the ranges
  * each signal takes, not tuned on real scans yet. They're exported so the
@@ -109,6 +111,10 @@ export const SIGNAL_QUALITY = 0.6;
 export const COUNTED_SIGNALS: readonly SignalName[] = ["image", "name", "collector"];
 /** How many of COUNTED_SIGNALS must agree for the margin path. */
 export const CONFIDENT_SIGNALS = 2;
+/** Path c: the image alone is enough at this similarity... */
+export const IMAGE_ALONE_SIMILARITY = 0.8;
+/** ...with this lead, when no other candidate is a printing of the same card. */
+export const IMAGE_ALONE_MARGIN = 2 * CONFIDENT_MARGIN;
 
 /** Image similarity that's no evidence at all; agreement ramps from here... */
 export const IMAGE_ZERO = 0.3;
@@ -641,7 +647,12 @@ export function rankRecognition(input: RecognitionInput): RecognitionResult {
       (top.nameScore ?? 0) >= NAME_AGREES || (topMatch !== null && sameName(topMatch.card, top.card));
     const printingSure = isExactPrinting(top.card, collector) && nameAgrees;
 
-    confident = !contradicted && (signalsSure || printingSure);
+    const imageAloneSure =
+      margin >= IMAGE_ALONE_MARGIN &&
+      (top.similarity ?? 0) >= IMAGE_ALONE_SIMILARITY &&
+      !candidates.slice(1).some((other) => sameName(other.card, top.card));
+
+    confident = !contradicted && (signalsSure || printingSure || imageAloneSure);
   }
 
   return { candidates: candidates.slice(0, MAX_CANDIDATES), confident };
