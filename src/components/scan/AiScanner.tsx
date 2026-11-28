@@ -122,8 +122,10 @@ type KeptScan = Omit<RecognitionOutcome, "capture" | "orientedCard"> & {
   /** A card was found in the burst. */
   found: boolean;
   detection: Detection | null;
-  /** Debug only. */
+  /** Debug only: the flat card, the loose crop OCR falls back to, the camera frame. */
   flatCard: string | null;
+  looseCard: string | null;
+  frame: string | null;
 };
 
 type Lock = {
@@ -156,6 +158,8 @@ function keepScan(outcome: RecognitionOutcome, id: number, debug: boolean): Kept
     found: capture !== null,
     detection: capture?.detection ?? null,
     flatCard: debug && capture ? rgbaToDataUrl(capture.best) : null,
+    looseCard: debug && capture ? rgbaToDataUrl(capture.loose) : null,
+    frame: debug && capture ? rgbaToDataUrl(capture.frame, "image/jpeg", 0.85) : null,
   };
 }
 
@@ -935,6 +939,22 @@ export default function AiScanner({
               // A data URL from our own canvas, so next/image adds nothing here.
               // eslint-disable-next-line @next/next/no-img-element
               <img src={lastScan.flatCard} alt="Flattened card sent to the matcher" className="max-w-xs" />
+            )}
+            {lastScan.looseCard && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={lastScan.looseCard} alt="Wider crop the text reader falls back to" className="max-w-xs" />
+            )}
+            {lastScan.frame && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={lastScan.frame} alt="Camera frame the card came from" className="max-w-md" />
+            )}
+            {lastScan.detection && (
+              <p>
+                Corners:{" "}
+                <code>
+                  {lastScan.detection.quad.map((p) => `${Math.round(p.x)},${Math.round(p.y)}`).join(" ")}
+                </code>
+              </p>
             )}
             <p>
               Detector: <code>{lastScan.detection?.source ?? "no card"}</code>

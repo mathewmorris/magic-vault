@@ -18,10 +18,12 @@ export type CardCapture = {
    * (the name or the collector line); this still has it. OCR falls back to it.
    */
   loose: RgbaImage;
+  /** The camera frame `best` came from. */
+  frame: RgbaImage;
 };
 
-/** How much bigger the quad is for `CardCapture.loose`: 7.5% more on every side. */
-export const LOOSE_SCALE = 1.15;
+/** How much bigger the quad is for `CardCapture.loose`: 15% more on every side. */
+export const LOOSE_SCALE = 1.3;
 
 /**
  * Detections that move more than this (mean corner distance / frame
@@ -78,5 +80,5 @@ export async function captureCard(
     Math.round(CARD_WIDTH * LOOSE_SCALE),
     Math.round(CARD_HEIGHT * LOOSE_SCALE),
   );
-  return { detection: best.detection, cards: consistent.map((w) => w.card), best: best.card, loose };
+  return { detection: best.detection, cards: consistent.map((w) => w.card), best: best.card, loose, frame: best.frame };
 }

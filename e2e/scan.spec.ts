@@ -237,15 +237,21 @@ for (const user of USERS) {
       );
       // Pictures into the log, since the job's artifacts can't always be
       // fetched: the flattened card the scanner read, and the page.
-      const flat = await withTimeout(
-        page
-          .locator('img[alt="Flattened card sent to the matcher"]')
-          .first()
-          .getAttribute("src", { timeout: 2000 })
-          .catch(() => null),
-        5000,
-      );
-      if (typeof flat === "string") console.log(`E2E_IMAGE flat-card ${user.id} ${flat}`);
+      for (const [label, alt] of [
+        ["flat-card", "Flattened card sent to the matcher"],
+        ["loose-card", "Wider crop the text reader falls back to"],
+        ["frame", "Camera frame the card came from"],
+      ] as const) {
+        const src = await withTimeout(
+          page
+            .locator(`img[alt="${alt}"]`)
+            .first()
+            .getAttribute("src", { timeout: 2000 })
+            .catch(() => null),
+          5000,
+        );
+        if (typeof src === "string") console.log(`E2E_IMAGE ${label} ${user.id} ${src}`);
+      }
       const shot = await withTimeout(
         page.screenshot({ type: "jpeg", quality: 60 }).catch(() => null),
         10_000,

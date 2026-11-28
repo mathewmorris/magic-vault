@@ -141,6 +141,7 @@ const capture: CardCapture = {
   cards: [flatCard, flatCard],
   best: flatCard,
   loose: flatCard,
+  frame: flatCard,
 };
 
 const boltOcr: CardOcrResult = {
