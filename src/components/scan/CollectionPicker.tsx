@@ -2,6 +2,9 @@
 
 import Link from "next/link";
 
+/** What a first scan's collection is called when the user has none yet. */
+export const DEFAULT_COLLECTION_NAME = "My collection";
+
 export interface PickerCollection {
   id: string;
   name: string | null;
@@ -29,11 +32,11 @@ export default function CollectionPicker({
   if (collections.length === 0) {
     return (
       <p className="text-sm">
-        You don&apos;t have any collections yet.{" "}
+        Cards you scan go into a new collection called {DEFAULT_COLLECTION_NAME}. You can rename it later or{" "}
         <Link href="/collection/create" className="underline">
-          Create one
-        </Link>{" "}
-        to add scanned cards to it.
+          make a different one
+        </Link>
+        .
       </p>
     );
   }

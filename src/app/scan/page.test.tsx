@@ -21,6 +21,7 @@ jest.mock("~/utils/api", () => ({
       getAll: { useQuery: () => ({ data: undefined, isError: false }) },
       addCard: { useMutation: () => mutation },
       removeCard: { useMutation: () => mutation },
+      create: { useMutation: () => mutation },
     },
   },
 }));

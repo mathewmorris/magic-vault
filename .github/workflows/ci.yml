@@ -143,3 +143,72 @@ jobs:
         run: python -m unittest -v
         env:
           BROKER_TEST_DATABASE_URL: "postgresql://postgres:postgres@localhost:5432/broker_test"
+
+  scan-browser:
+    # Mat's rule: check /scan in a real browser before calling a preview ready.
+    # Builds the app with the AI scanner on, signs in as test users, points a
+    # fake camera at a real card and checks it loads, plays and adds the card.
+    name: Scanner in a browser
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: magicvault_e2e
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      SKIP_ENV_VALIDATION: "true"
+      DATABASE_URL: "postgresql://postgres:postgres@localhost:5432/magicvault_e2e"
+      NEXTAUTH_SECRET: "ci"
+      NEXTAUTH_URL: "http://localhost:3000"
+      NEXT_PUBLIC_FEATURE_AI_SCAN: "true"
+      NEXT_PUBLIC_FEATURE_AI_SCAN_DEBUG: "true"
+      # Turns on the test-user sign-in (src/server/previewLogin/enabled.ts).
+      VERCEL_ENV: "preview"
+      E2E_FAKE_CAMERA: ${{ github.workspace }}/e2e-out/card.y4m
+      E2E_SCAN_TARGET: ${{ github.workspace }}/e2e-out/target.json
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+          command -v ffmpeg || sudo apt-get install -y ffmpeg
+
+      - name: Database and a card to scan
+        run: |
+          npx prisma migrate deploy
+          node e2e/scan/seed-cards.mjs e2e-out
+          # The card on a dark table, like a phone camera would see it.
+          ffmpeg -loglevel error -loop 1 -i e2e-out/card.png \
+            -vf "scale=-2:600,pad=1280:720:(ow-iw)/2:(oh-ih)/2:color=0x2a2a2a,format=yuv420p" \
+            -t 4 -r 15 e2e-out/card.y4m
+
+      - name: Build
+        run: npm run build
+
+      - name: Scan in Chromium
+        run: |
+          npm run start > e2e-out/server.log 2>&1 &
+          for i in $(seq 1 60); do curl -sf -o /dev/null http://localhost:3000 && break; sleep 1; done
+          curl -sf -o /dev/null http://localhost:3000 || { cat e2e-out/server.log; exit 1; }
+          npx playwright test e2e/scan.spec.ts --reporter=list --retries=0
+
+      - name: Server log
+        if: failure()
+        run: tail -n 200 e2e-out/server.log

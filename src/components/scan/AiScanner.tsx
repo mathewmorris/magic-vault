@@ -779,6 +779,9 @@ export default function AiScanner({
           <span>
             Loading the card scanner (about 12 MB, once)... {Math.round((loadingProgress ?? 0) * 100)}%
           </span>
+          {loadState.status === "loading" && loadState.waitingOn.length > 0 && (
+            <span className="text-xs text-gray-400">Still loading: {loadState.waitingOn.join(", ")}</span>
+          )}
           <progress className="w-full max-w-xl" max={1} value={loadingProgress ?? 0} />
         </div>
       )}

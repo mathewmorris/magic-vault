@@ -25,7 +25,12 @@ import { captureCard, type CardCapture } from "./pipeline";
 
 export type LoadState =
   | { status: "idle" }
-  | { status: "loading"; progress: number }
+  | {
+      status: "loading";
+      progress: number;
+      /** What hasn't finished yet, in plain words, so a stall shows where it is. */
+      waitingOn: string[];
+    }
   | { status: "ready"; ocr: boolean; detectorKinds: ("pose" | "opencv")[] }
   | { status: "failed"; error: string };
 
@@ -69,7 +74,12 @@ export function useCardRecognizer() {
     const parts = { detector: 0, embedder: 0, ocr: 0 };
     const report = () => {
       if (stale()) return;
-      setState({ status: "loading", progress: (parts.detector + parts.embedder + parts.ocr) / 3 });
+      const waitingOn = [
+        parts.detector < 1 ? "card finder" : null,
+        parts.embedder < 1 ? "card matcher" : null,
+        parts.ocr < 1 ? "text reader" : null,
+      ].filter((part): part is string => part !== null);
+      setState({ status: "loading", progress: (parts.detector + parts.embedder + parts.ocr) / 3, waitingOn });
     };
     report();
 

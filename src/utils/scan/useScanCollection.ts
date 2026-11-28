@@ -7,8 +7,8 @@
  */
 
 import { useSession } from "next-auth/react";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { collectionLabel } from "~/components/scan/CollectionPicker";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { collectionLabel, DEFAULT_COLLECTION_NAME } from "~/components/scan/CollectionPicker";
 import { api } from "~/utils/api";
 import { signInHref } from "~/utils/signInHref";
 import {
@@ -35,6 +35,9 @@ export function useScanCollection(requestedCollection: string | null) {
   const [addedName, setAddedName] = useState<string | null>(null);
   const addCard = api.collection.addCard.useMutation();
   const removeCard = api.collection.removeCard.useMutation();
+  const createCollection = api.collection.create.useMutation();
+  // The default collection being made, so two quick adds don't make two.
+  const creatingRef = useRef<Promise<{ id: string; name: string | null }> | null>(null);
   // React Query keeps reset stable across renders, unlike the mutation object.
   const resetAddCard = addCard.reset;
   const signInUrl = signInHref(
@@ -55,7 +58,13 @@ export function useScanCollection(requestedCollection: string | null) {
   }, [collectionsQuery.data, collections, collectionId, requestedCollection]);
 
   const collection = collections.find((entry) => entry.id === collectionId) ?? null;
-  const collectionName = collection ? collectionLabel(collection.name) : null;
+  // No collections yet: the first add makes one, so scanning needs no setup.
+  const needsDefault = auth === "signed-in" && collectionsQuery.data !== undefined && collections.length === 0;
+  const collectionName = collection
+    ? collectionLabel(collection.name)
+    : needsDefault
+      ? DEFAULT_COLLECTION_NAME
+      : null;
 
   const chooseCollection = useCallback((id: string) => {
     setCollectionId(id);
@@ -68,10 +77,36 @@ export function useScanCollection(requestedCollection: string | null) {
     resetAddCard();
   }, [resetAddCard]);
 
-  const add = (match: { id: string; name: string }) => {
-    if (!collection) return;
-    const target = { collectionId: collection.id, collectionName: collectionName ?? "" };
+  const makeDefaultCollection = () => {
+    creatingRef.current ??= createCollection
+      .mutateAsync({ name: DEFAULT_COLLECTION_NAME, cards: [] })
+      .then((created) => {
+        setCollectionId(created.id);
+        saveLastCollectionId(created.id);
+        void utils.collection.getAll.invalidate();
+        return created;
+      })
+      .finally(() => {
+        creatingRef.current = null;
+      });
+    return creatingRef.current;
+  };
 
+  const add = (match: { id: string; name: string }) => {
+    if (!collection) {
+      if (!needsDefault) return;
+      void makeDefaultCollection()
+        .then((created) => addTo(match, { collectionId: created.id, collectionName: collectionLabel(created.name) }))
+        .catch(() => undefined); // createCollection.error shows it
+      return;
+    }
+    addTo(match, { collectionId: collection.id, collectionName: collectionName ?? "" });
+  };
+
+  const addTo = (
+    match: { id: string; name: string },
+    target: { collectionId: string; collectionName: string },
+  ) => {
     addCard.mutate(
       { collectionId: target.collectionId, cardId: match.id },
       {
@@ -115,8 +150,8 @@ export function useScanCollection(requestedCollection: string | null) {
     clearAdded,
     add,
     undo,
-    adding: addCard.isLoading,
-    addError: addCard.error?.message ?? null,
+    adding: addCard.isLoading || createCollection.isLoading,
+    addError: addCard.error?.message ?? createCollection.error?.message ?? null,
     undoing: removeCard.isLoading,
     undoError: removeCard.error?.message ?? null,
   };
