@@ -9,6 +9,8 @@ const path = require("path");
 /** @type {import("next").NextConfig} */
 const config = {
   reactStrictMode: true,
+  // The browser check in CI (e2e/scan.spec.ts) maps stuck stacks back to source.
+  productionBrowserSourceMaps: process.env.E2E_SOURCE_MAPS === "1",
   images: {
     remotePatterns: [
       {

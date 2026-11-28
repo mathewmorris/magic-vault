@@ -177,6 +177,7 @@ jobs:
       VERCEL_ENV: "preview"
       E2E_FAKE_CAMERA: ${{ github.workspace }}/e2e-out/card.y4m
       E2E_SCAN_TARGET: ${{ github.workspace }}/e2e-out/target.json
+      E2E_SOURCE_MAPS: "1"
     steps:
       - uses: actions/checkout@v5
 

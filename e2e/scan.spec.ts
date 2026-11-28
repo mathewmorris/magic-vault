@@ -11,7 +11,7 @@
  * Findings are also printed as GitHub annotations, so they show on the PR's
  * checks without opening the log.
  */
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type CDPSession, type Page } from "@playwright/test";
 import { readFileSync } from "node:fs";
 
 const videoFile = process.env.E2E_FAKE_CAMERA;
@@ -43,20 +43,107 @@ function annotate(level: "error" | "warning" | "notice", title: string, lines: s
   console.log(`::${level} title=${escape(title)}::${escape(lines.join("\n").slice(0, 6000))}`);
 }
 
+/**
+ * Requests that fail in a healthy page: Next cancels link prefetches when the
+ * page navigates, and Vercel's analytics script only exists on Vercel.
+ */
+const EXPECTED_FAILURES = [/[?&]_rsc=/, /\/_vercel\/insights\//];
+const expected = (text: string) => EXPECTED_FAILURES.some((pattern) => pattern.test(text));
+
 /** Everything that went wrong in the page: errors, failed and refused requests. */
 function watchProblems(page: Page) {
   const problems: string[] = [];
   page.on("console", (message) => {
-    if (message.type() === "error") problems.push(`console.error: ${message.text()}`);
+    if (message.type() !== "error") return;
+    const where = message.location().url;
+    if (expected(where)) return;
+    problems.push(`console.error: ${message.text()}${where ? ` (${where})` : ""}`);
   });
   page.on("pageerror", (error) => problems.push(`page error: ${error.message}`));
-  page.on("requestfailed", (request) =>
-    problems.push(`request failed: ${request.url()} (${request.failure()?.errorText ?? "unknown"})`),
-  );
+  page.on("requestfailed", (request) => {
+    if (!expected(request.url()))
+      problems.push(`request failed: ${request.url()} (${request.failure()?.errorText ?? "unknown"})`);
+  });
   page.on("response", (response) => {
-    if (response.status() >= 400) problems.push(`HTTP ${response.status()}: ${response.url()}`);
+    if (response.status() >= 400 && !expected(response.url()))
+      problems.push(`HTTP ${response.status()}: ${response.url()}`);
   });
   return problems;
+}
+
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T | "timeout"> {
+  return Promise.race([promise, new Promise<"timeout">((resolve) => setTimeout(() => resolve("timeout"), ms))]);
+}
+
+/** True when the page's main thread answers within `ms`. */
+async function responsive(page: Page, ms = 3000): Promise<boolean> {
+  return (await withTimeout(page.evaluate(() => true), ms)) === true;
+}
+
+type CallFrame = {
+  functionName: string;
+  url: string;
+  location: { scriptId: string; lineNumber: number; columnNumber: number };
+};
+
+/** Maps a frame in a built chunk back to its source, using the chunk's .map. */
+async function original(page: Page, frame: CallFrame): Promise<string | null> {
+  if (!frame.url.startsWith("http")) return null;
+  try {
+    const response = await page.request.get(`${frame.url}.map`);
+    if (!response.ok()) return null;
+    const { SourceMapConsumer } = await import("source-map-js");
+    const consumer = new SourceMapConsumer(JSON.parse(await response.text()) as never);
+    const pos = consumer.originalPositionFor({
+      line: frame.location.lineNumber + 1,
+      column: frame.location.columnNumber,
+    });
+    return pos.source ? `${pos.source}:${pos.line ?? "?"}:${pos.column ?? "?"}${pos.name ? ` (${pos.name})` : ""}` : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Pauses the page's main thread and says where it is: the way to tell which
+ * part of the scanner is spinning when the page stops answering.
+ */
+async function mainThreadStack(page: Page): Promise<string[]> {
+  let cdp: CDPSession | null = null;
+  try {
+    cdp = await page.context().newCDPSession(page);
+    const session = cdp;
+    const paused = new Promise<{ callFrames: CallFrame[] }>((resolve) =>
+      session.once("Debugger.paused", (event) => resolve(event as { callFrames: CallFrame[] })),
+    );
+    await withTimeout(session.send("Debugger.enable"), 10_000);
+    await withTimeout(session.send("Debugger.pause"), 10_000);
+    const event = await withTimeout(paused, 15_000);
+    if (event === "timeout") return ["(the debugger couldn't pause the page)"];
+    const lines: string[] = [];
+    for (const frame of event.callFrames.slice(0, 12)) {
+      const { lineNumber, columnNumber, scriptId } = frame.location;
+      const mapped = await original(page, frame);
+      let snippet = "";
+      if (!mapped) {
+        const source = await withTimeout(session.send("Debugger.getScriptSource", { scriptId }), 5000);
+        if (source !== "timeout") {
+          const line = source.scriptSource.split("\n")[lineNumber] ?? "";
+          snippet = ` near: ${line.slice(Math.max(0, columnNumber - 80), columnNumber + 80)}`;
+        }
+      }
+      lines.push(
+        `at ${frame.functionName || "(anonymous)"} ${frame.url.split("/").slice(-2).join("/")}:${lineNumber + 1}:${columnNumber}` +
+          (mapped ? ` = ${mapped}` : snippet),
+      );
+    }
+    await withTimeout(session.send("Debugger.resume"), 5000);
+    return lines;
+  } catch (error) {
+    return [`(couldn't read the stack: ${error instanceof Error ? error.message : String(error)})`];
+  } finally {
+    await cdp?.detach().catch(() => undefined);
+  }
 }
 
 const USERS = [
@@ -86,10 +173,25 @@ for (const user of USERS) {
       // Progress while the models load, so a stall shows where it stopped.
       const loading = page.getByRole("status").filter({ hasText: /Loading the card scanner/ });
       let lastText = "";
+      let lastChange = Date.now();
+      let sampled = false;
       while (Date.now() - started < LOAD_TIMEOUT_MS) {
+        if (!(await responsive(page))) {
+          mark("the page stopped responding (main thread busy); where it's stuck:");
+          timeline.push(...(await mainThreadStack(page)));
+          throw new Error("The page froze while the scanner loaded");
+        }
         const text = (await loading.textContent({ timeout: 1000 }).catch(() => null))?.trim() ?? null;
         if (text === null) break;
-        if (text !== lastText) mark(text);
+        if (text !== lastText) {
+          mark(text);
+          lastChange = Date.now();
+        } else if (!sampled && Date.now() - lastChange > 30_000) {
+          // Still answering but not moving: show what it's waiting in.
+          sampled = true;
+          mark("no progress for 30s; main thread right now:");
+          timeline.push(...(await mainThreadStack(page)));
+        }
         lastText = text;
         await page.waitForTimeout(1000);
       }
@@ -113,11 +215,15 @@ for (const user of USERS) {
       mark(`added ${target!.name}`);
       await expect(page.getByText(/Added this session: 1 card/)).toBeVisible();
     } finally {
-      const debug = await page
-        .locator("details")
-        .allInnerTexts()
-        .then((texts) => texts.join("\n").slice(0, 1500))
-        .catch(() => "");
+      const debugTexts = await withTimeout(
+        page
+          .locator("details")
+          .allInnerTexts()
+          .then((texts) => texts.join("\n").slice(0, 1500))
+          .catch(() => ""),
+        5000,
+      );
+      const debug = debugTexts === "timeout" ? "" : debugTexts;
       annotate("notice", `Scan timeline (${user.label})`, debug ? [...timeline, "", debug] : timeline);
       if (problems.length > 0) annotate("error", `Page problems (${user.label})`, [...new Set(problems)]);
     }
