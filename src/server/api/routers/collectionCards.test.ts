@@ -6,6 +6,16 @@ import { type Card, type CardsOnCollections, type Collection } from "@prisma/cli
 import { buildCard } from "../../testing/cardFixture";
 import { buyLinks } from "~/utils/buyLinks";
 import { toCardEntries } from "./collection";
+import { smallImage } from "~/server/collectionImport";
+
+// What the cards procedure hands back for a card: only what the page shows.
+const shown = (card: Card, prices: unknown = null) => ({
+    id: card.id,
+    name: card.name,
+    finishes: card.finishes,
+    image: smallImage(card),
+    prices,
+});
 
 // Buy links are checked against the switch being off, whatever the local .env says.
 jest.mock("../../affiliate", () => ({ affiliateConfig: () => ({ enabled: false }) }));
@@ -78,11 +88,41 @@ describe("collection card procedures", () => {
 
             const [entry] = await authedCaller().collection.cards({ collectionId });
 
-            expect(entry?.card).toStrictEqual({ ...lotus, prices: { usd: "10.00" } });
+            expect(entry?.card).toStrictEqual(shown(lotus, { usd: "10.00" }));
             expect(entry?.card).not.toHaveProperty("price");
             expect(prismaMock.card.findMany).toHaveBeenCalledWith({
                 where: { id: { in: ["lotus"] } },
-                include: { price: { select: { prices: true } } },
+                select: {
+                    id: true,
+                    name: true,
+                    finishes: true,
+                    image_uris: true,
+                    card_faces: true,
+                    purchase_uris: true,
+                    price: { select: { prices: true } },
+                },
+            });
+        });
+
+        test("sends only what the page shows, with the small image picked out", async () => {
+            const card = buildCard({
+                id: "dfc",
+                image_uris: null,
+                card_faces: [{ image_uris: { small: "https://cards.scryfall.io/small/front/d/f/dfc.jpg" } }],
+                legalities: { commander: "legal" },
+                oracle_text: "Long rules text",
+            });
+            prismaMock.cardsOnCollections.findMany.mockResolvedValue([buildEntry({ cardId: "dfc" })]);
+            prismaMock.card.findMany.mockResolvedValue([{ ...card, price: null }] as Card[]);
+
+            const [entry] = await authedCaller().collection.cards({ collectionId });
+
+            expect(entry?.card).toStrictEqual({
+                id: "dfc",
+                name: card.name,
+                finishes: card.finishes,
+                image: "https://cards.scryfall.io/small/front/d/f/dfc.jpg",
+                prices: null,
             });
         });
 
@@ -103,9 +143,9 @@ describe("collection card procedures", () => {
             await expect(
                 authedCaller().collection.cards({ collectionId })
             ).resolves.toStrictEqual([
-                { card: { ...mox, prices: null }, finish: "nonfoil", condition: "NM", language: "en", count: 2, buyLinks: buyLinks(mox) },
-                { card: { ...lotus, prices: null }, finish: "nonfoil", condition: "LP", language: "ja", count: 1, buyLinks: buyLinks(lotus) },
-                { card: { ...mox, prices: null }, finish: "foil", condition: "NM", language: "en", count: 1, buyLinks: buyLinks(mox) },
+                { card: shown(mox), finish: "nonfoil", condition: "NM", language: "en", count: 2, buyLinks: buyLinks(mox) },
+                { card: shown(lotus), finish: "nonfoil", condition: "LP", language: "ja", count: 1, buyLinks: buyLinks(lotus) },
+                { card: shown(mox), finish: "foil", condition: "NM", language: "en", count: 1, buyLinks: buyLinks(mox) },
             ]);
         });
 
@@ -131,7 +171,7 @@ describe("collection card procedures", () => {
 
             await expect(
                 authedCaller().collection.cards({ collectionId })
-            ).resolves.toStrictEqual([{ card: { ...lotus, prices: null }, finish: "nonfoil", condition: "NM", language: "en", count: 1, buyLinks: buyLinks(lotus) }]);
+            ).resolves.toStrictEqual([{ card: shown(lotus), finish: "nonfoil", condition: "NM", language: "en", count: 1, buyLinks: buyLinks(lotus) }]);
         });
 
         test("throws FORBIDDEN for someone else's collection", async () => {

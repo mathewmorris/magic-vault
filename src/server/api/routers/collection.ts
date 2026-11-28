@@ -55,6 +55,17 @@ const entryOrder = [
   { finish: "asc" },
 ] satisfies Prisma.CardsOnCollectionsOrderByWithRelationInput[];
 
+// The Card columns the collection page needs.
+const collectionCardSelect = {
+  id: true,
+  name: true,
+  finishes: true,
+  image_uris: true,
+  card_faces: true,
+  purchase_uris: true,
+  price: { select: { prices: true } },
+} satisfies Prisma.CardSelect;
+
 function assertCardHasFinish(finishes: unknown, finish: string) {
   const known = cardFinishes(finishes);
   // Rows from before finishes were stored have no list; allow any finish there.
@@ -251,15 +262,28 @@ export const collectionRouter = createTRPCRouter({
         where: {
           id: { in: entries.map(entry => entry.cardId) },
         },
-        include: { price: { select: { prices: true } } },
+        select: collectionCardSelect,
       })
-      // Prices live in CardPrice; hand them back on the card as before.
-      const cardsById = new Map(cards.map(({ price, ...card }) => [card.id, { ...card, prices: price?.prices ?? null }]));
       const affiliate = affiliateConfig();
+      // Only what the collection page shows goes back: a full Card row is
+      // ~3.6 KB (legalities, oracle text, every image size), this is ~250 B.
+      // The image URL and buy links are worked out here so the page doesn't
+      // need image_uris, card_faces or purchase_uris.
+      const cardsById = new Map(cards.map((card) => [card.id, {
+        card: {
+          id: card.id,
+          name: card.name,
+          finishes: card.finishes,
+          image: smallImage(card),
+          // Prices live in CardPrice.
+          prices: card.price?.prices ?? null,
+        },
+        buyLinks: buyLinks(card, affiliate),
+      }]));
 
       return entries.flatMap(({ cardId, finish, condition, language, count }) => {
-        const card = cardsById.get(cardId);
-        return card ? [{ card, finish, condition, language, count, buyLinks: buyLinks(card, affiliate) }] : [];
+        const found = cardsById.get(cardId);
+        return found ? [{ card: found.card, finish, condition, language, count, buyLinks: found.buyLinks }] : [];
       });
     }),
 

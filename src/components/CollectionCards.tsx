@@ -3,7 +3,6 @@
 import Image from "next/image";
 import Link from "next/link";
 import { type RouterOutputs } from "~/utils/api";
-import { smallImageUrl } from "~/utils/cardImage";
 import { conditionLabel, languageLabel } from "~/utils/import/values";
 import {
   cardFinishes,
@@ -44,7 +43,7 @@ export default function CollectionCards({
   return (
     <ul className="grid grid-cols-2 gap-4 md:grid-cols-4 lg:grid-cols-5">
       {cards.map(({ card, finish: storedFinish, condition, language, count, buyLinks }) => {
-        const image = smallImageUrl(card);
+        const image = card.image;
         // The API only ever stores one of the known finishes.
         const finish: Finish = isFinish(storedFinish) ? storedFinish : "nonfoil";
         const options = cardFinishes(card.finishes);
@@ -60,6 +59,11 @@ export default function CollectionCards({
                 height={204}
                 alt={card.name}
                 className="rounded-lg"
+                // Scryfall's small images are already 146 x 204, so load them
+                // straight from Scryfall's CDN. Going through Vercel's image
+                // optimizer adds a resize the first time each card is shown
+                // and counts against the free plan's monthly limit.
+                unoptimized
               />
             ) : (
               <div className="flex h-[204px] w-[146px] items-center justify-center rounded-lg bg-gray-800 p-2 text-center">

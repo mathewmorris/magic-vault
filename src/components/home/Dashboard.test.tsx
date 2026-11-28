@@ -13,8 +13,16 @@ const queries: { collections: Query; values: Query; decks: Query } = {
   decks: { isLoading: true, isError: false },
 };
 
+const prefetchCards = jest.fn();
+
 jest.mock("~/utils/api", () => ({
   api: {
+    useUtils: () => ({
+      collection: {
+        byId: { getData: () => undefined, setData: jest.fn() },
+        cards: { prefetch: prefetchCards },
+      },
+    }),
     collection: {
       getAll: { useQuery: () => queries.collections },
       values: { useQuery: () => queries.values },
@@ -65,6 +73,18 @@ describe("Dashboard", () => {
     expect(hrefs).toEqual(["/collection/new", "/collection/old"]);
     expect(screen.getByText("$25.50")).toBeTruthy();
     expect(screen.getByText("$35.50")).toBeTruthy();
+  });
+
+  test("loads the listed collections' cards before they're clicked", () => {
+    queries.collections = loaded([
+      { id: "old", name: "Old box", updatedAt: new Date("2026-01-01") },
+      { id: "new", name: "Binder", updatedAt: new Date("2026-11-01") },
+    ]);
+
+    render(<Dashboard />);
+
+    expect(prefetchCards).toHaveBeenCalledWith({ collectionId: "new" }, expect.anything());
+    expect(prefetchCards).toHaveBeenCalledWith({ collectionId: "old" }, expect.anything());
   });
 
   test("lists decks with their format and card count", () => {

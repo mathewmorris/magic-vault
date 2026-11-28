@@ -12,6 +12,7 @@ import ImportPanel, { type ImportSummary } from "~/components/ImportPanel";
 import SearchBar from "~/components/SearchBar";
 import { useToast } from "~/components/toast";
 import { api } from "~/utils/api";
+import { COLLECTION_STALE_TIME } from "~/utils/usePrefetchCollection";
 import { anyAffiliate } from "~/utils/buyLinks";
 import { collectionValue, formatUsd, unpricedLabel, type Finish } from "~/utils/price";
 import { collectionLabel, mutationErrorMessage } from "~/utils/toastMessages";
@@ -36,13 +37,16 @@ export default function Page() {
   // Both queries are keyed on the id from the URL rather than on each other's
   // results, so they start together on a reload or a client-side navigation,
   // and neither ever runs with an empty or undefined key.
+  // The collections list and home page load both of these ahead of a click
+  // (see usePrefetchCollection). staleTime keeps that data from being fetched
+  // a second time on arrival; changes made here invalidate it right away.
   const collectionQuery = api.collection.byId.useQuery(
     { id },
-    { enabled: id !== "", retry: shouldRetry },
+    { enabled: id !== "", retry: shouldRetry, staleTime: COLLECTION_STALE_TIME },
   );
   const cardsQuery = api.collection.cards.useQuery(
     { collectionId: id },
-    { enabled: id !== "", retry: shouldRetry },
+    { enabled: id !== "", retry: shouldRetry, staleTime: COLLECTION_STALE_TIME },
   );
 
   function refreshCollectionLists() {
