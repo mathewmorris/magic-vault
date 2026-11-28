@@ -198,23 +198,26 @@ export async function createCardDetector(
   const poseSpec = options.pose === undefined ? POSE_MODEL : options.pose;
   const useOpenCv = options.useOpenCv ?? true;
 
-  const [pose, cv] = await Promise.all([
+  const [pose, opencv] = await Promise.all([
     poseSpec
       ? createPoseRunner(poseSpec).catch((error: unknown) => {
           warnOnce("pose-load", "Card corner model didn't load; using OpenCV only.", error);
           return null;
         })
       : Promise.resolve(null),
+    // Keep OpenCV in its wrapper until we're out of the promise chain: the
+    // module has its own `then`, so resolving a promise with it re-resolves
+    // forever and freezes the tab (see ./opencv.ts).
     useOpenCv
       ? import("./opencv")
           .then((mod) => mod.loadOpenCv())
-          .then((wrapped) => wrapped.cv)
           .catch((error: unknown) => {
             warnOnce("opencv-load", "OpenCV didn't load; card edge detection is off.", error);
             return null;
           })
       : Promise.resolve(null),
   ]);
+  const cv = opencv?.cv ?? null;
 
   const kinds: ("pose" | "opencv")[] = [];
   if (pose) kinds.push("pose");
