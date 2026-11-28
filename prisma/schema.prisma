@@ -216,6 +216,18 @@ model User {
     sessions      Session[]
     collections   Collection[]
     decks         Deck[]
+    achievements  UserAchievement[]
+}
+
+// Achievements a user has earned. The keys live in
+// src/utils/achievements/achievements.ts.
+model UserAchievement {
+    userId    String
+    key       String
+    earnedAt  DateTime @default(now())
+    user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+    @@id([userId, key])
 }
 
 model VerificationToken {

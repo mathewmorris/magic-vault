@@ -1,6 +1,7 @@
 "use client";
 
-import { signIn, signOut, useSession } from 'next-auth/react';
+import { signOut, useSession } from 'next-auth/react';
+import { goToSignIn } from '~/utils/goToSignIn';
 import Button from './Button';
 
 function AuthButton() {
@@ -8,7 +9,7 @@ function AuthButton() {
 
   return (
     <Button
-      onClick={sessionData ? () => void signOut() : () => void signIn()}
+      onClick={sessionData ? () => void signOut() : () => goToSignIn()}
     >
       {sessionData ? "Sign out" : "Sign in"}
     </Button>
@@ -16,4 +17,3 @@ function AuthButton() {
 }
 
 export default AuthButton;
-
