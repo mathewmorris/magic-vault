@@ -59,7 +59,8 @@ export function quadSides(quad: Quad): { horizontal: number; vertical: number } 
  *
  * What this can't know: which way up the card is. A card held upside down (or
  * sideways the other way) comes out rotated 180 degrees. Callers that care
- * should try both the warp and `rotate180` of it.
+ * should try both the warp and `rotate180` of it; `isSideways` tells them the
+ * quad was turned, and ../orientation.ts picks which turns of the warp to try.
  */
 export function orderCorners(points: Point[]): Quad {
   if (points.length !== 4) throw new Error(`Expected 4 corners, got ${points.length}`);
@@ -252,6 +253,52 @@ export function warpQuad(image: RgbaImage, quad: Quad, outWidth: number, outHeig
     }
   }
   return { data: out, width: outWidth, height: outHeight };
+}
+
+/**
+ * Did this card lie sideways in the photo? True when the quad's long sides
+ * (left and right after orderCorners) run more across the screen than up and
+ * down. Works on a quad in any corner order: it looks at the longer pair of
+ * opposite sides.
+ */
+export function isSideways(quad: Quad): boolean {
+  const [tl, tr, br, bl] = quad;
+  const { horizontal, vertical } = quadSides(quad);
+  // The long pair: left/right (TL->BL, TR->BR) or top/bottom (TL->TR, BL->BR).
+  const [a0, a1, b0, b1] = vertical >= horizontal ? [tl, bl, tr, br] : [tl, tr, bl, br];
+  const dx = Math.abs(a1.x - a0.x) + Math.abs(b1.x - b0.x);
+  const dy = Math.abs(a1.y - a0.y) + Math.abs(b1.y - b0.y);
+  return dx > dy;
+}
+
+/** A clockwise quarter turn, in degrees. */
+export type Orientation = 0 | 90 | 180 | 270;
+
+/**
+ * Turn an image clockwise by a multiple of 90 degrees. 90 and 270 swap the
+ * width and height. 0 returns the same image object.
+ */
+export function rotateImage(image: RgbaImage, degrees: Orientation): RgbaImage {
+  if (degrees === 0) return image;
+  if (degrees === 180) return rotate180(image);
+  const { width, height, data } = image;
+  const out = new Uint8ClampedArray(width * height * 4);
+  // Output is height x width. Clockwise: source (x, y) lands at
+  // (height - 1 - y, x); counter-clockwise (270): at (y, width - 1 - x).
+  const outWidth = height;
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const ox = degrees === 90 ? height - 1 - y : y;
+      const oy = degrees === 90 ? x : width - 1 - x;
+      const s = (y * width + x) * 4;
+      const o = (oy * outWidth + ox) * 4;
+      out[o] = data[s]!;
+      out[o + 1] = data[s + 1]!;
+      out[o + 2] = data[s + 2]!;
+      out[o + 3] = data[s + 3]!;
+    }
+  }
+  return { data: out, width: outWidth, height: width };
 }
 
 export function rotate180(image: RgbaImage): RgbaImage {
