@@ -11,6 +11,7 @@ import {
 import { prismaExecutor, prismaTransaction } from "~/server/recognition/prismaSql";
 import { isFeatureEnabled } from "~/utils/featureFlags";
 import { EMBED_MODEL } from "~/utils/recognition/model";
+import { bestVariantIndex, topSimilarity } from "~/utils/recognition/variants";
 
 /** The card fields the scanner shows for a match. */
 export const scanCardSelect = {
@@ -32,7 +33,20 @@ export type ScanMatch = { card: ScanCard; face: number; similarity: number };
 
 export type ScanStatus = { enabled: boolean; modelId: string; indexed: number };
 
-export type ScanMatchResult = { matches: ScanMatch[]; printing: ScanCard | null };
+export type ScanMatchResult = {
+  matches: ScanMatch[];
+  printing: ScanCard | null;
+  /**
+   * Only when `alternates` were sent: which embedding `matches` came from
+   * (0 = `embedding`, i = `alternates[i - 1]`), and the best similarity each
+   * embedding reached (null when it found nothing), in the same order.
+   */
+  variant?: number;
+  variantSimilarities?: (number | null)[];
+};
+
+/** How many extra embeddings (other orientations of the same card) one match call takes. */
+export const MAX_MATCH_ALTERNATES = 3;
 
 function assertScanEnabled() {
   if (!isFeatureEnabled("aiScan")) {
@@ -53,12 +67,21 @@ export const scanRouter = createTRPCRouter({
   /**
    * Cards whose image embeddings are closest to `embedding`, best first, plus
    * the exact printing when OCR read a set code and collector number.
+   *
+   * `alternates` are more embeddings of the same capture (the card turned
+   * other ways, see src/utils/recognition/orientation.ts). Each one is
+   * searched, and the matches of the one whose best match is most similar
+   * come back, with its index as `variant` (ties go to `embedding`).
    */
   match: publicProcedure
     .meta({ description: "Match a card image embedding against the indexed card images." })
     .input(
       z.object({
         embedding: z.array(z.number().finite()).length(EMBED_MODEL.dims),
+        alternates: z
+          .array(z.array(z.number().finite()).length(EMBED_MODEL.dims))
+          .max(MAX_MATCH_ALTERNATES)
+          .optional(),
         modelId: z.string().min(1).max(200),
         limit: z.number().int().min(1).max(MAX_MATCH_LIMIT).default(20),
         printing: z
@@ -79,14 +102,22 @@ export const scanRouter = createTRPCRouter({
       }
 
       const exec = prismaExecutor(ctx.prisma);
-      const [nearest, printingRef] = await Promise.all([
-        findNearestCards(
-          exec,
-          { embedding: input.embedding, modelId: EMBED_MODEL.id, limit: input.limit },
-          { transaction: prismaTransaction(ctx.prisma) },
+      const embeddings = [input.embedding, ...(input.alternates ?? [])];
+      const [searches, printingRef] = await Promise.all([
+        Promise.all(
+          embeddings.map((embedding) =>
+            findNearestCards(
+              exec,
+              { embedding, modelId: EMBED_MODEL.id, limit: input.limit },
+              { transaction: prismaTransaction(ctx.prisma) },
+            ),
+          ),
         ),
         input.printing ? findPrinting(exec, input.printing) : Promise.resolve(null),
       ]);
+      const variantSimilarities = searches.map((rows) => topSimilarity(rows));
+      const variant = bestVariantIndex(variantSimilarities);
+      const nearest = searches[variant] ?? [];
 
       const ids = [...new Set([...nearest.map((n) => n.cardId), ...(printingRef ? [printingRef.id] : [])])];
       const cards =
@@ -100,6 +131,7 @@ export const scanRouter = createTRPCRouter({
         const card = byId.get(cardId);
         if (card) matches.push({ card, face, similarity });
       }
-      return { matches, printing: (printingRef && byId.get(printingRef.id)) ?? null };
+      const printing = (printingRef && byId.get(printingRef.id)) ?? null;
+      return input.alternates ? { matches, printing, variant, variantSimilarities } : { matches, printing };
     }),
 });
