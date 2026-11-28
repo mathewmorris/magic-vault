@@ -209,19 +209,35 @@ for (const user of USERS) {
       );
       mark("camera playing");
 
-      await expect(page.getByText(`Added ${target!.name}`).first(), "the card was added").toBeVisible({
-        timeout: ADD_TIMEOUT_MS,
-      });
+      // What the scanner says while it works, so a miss shows where it gave up.
+      const added = page.getByText(`Added ${target!.name}`).first();
+      const addBy = Date.now() + ADD_TIMEOUT_MS;
+      let lastSays = "";
+      while (Date.now() < addBy && !(await added.isVisible())) {
+        const says = (await page.locator("main").innerText().catch(() => ""))
+          .replace(/\s+/g, " ")
+          .replace(/Debug: what the scanner saw.*/, "")
+          .slice(-400);
+        if (says !== lastSays) mark(`page says: ${says}`);
+        lastSays = says;
+        await page.waitForTimeout(2000);
+      }
+      await expect(added, "the card was added").toBeVisible({ timeout: 1000 });
       mark(`added ${target!.name}`);
       await expect(page.getByText(/Added this session: 1 card/)).toBeVisible();
     } finally {
+      // textContent reads the debug panel even while it's folded shut.
       const debugTexts = await withTimeout(
         page
           .locator("details")
-          .allInnerTexts()
-          .then((texts) => texts.join("\n").slice(0, 1500))
+          .allTextContents()
+          .then((texts) => texts.join("\n").replace(/[ \t]+/g, " ").slice(0, 3000))
           .catch(() => ""),
         5000,
+      );
+      await withTimeout(
+        page.screenshot({ path: test.info().outputPath("scan.png"), fullPage: true }).catch(() => undefined),
+        10_000,
       );
       const debug = debugTexts === "timeout" ? "" : debugTexts;
       annotate("notice", `Scan timeline (${user.label})`, debug ? [...timeline, "", debug] : timeline);
