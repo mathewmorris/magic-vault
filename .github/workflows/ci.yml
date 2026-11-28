@@ -149,7 +149,8 @@ jobs:
     # Builds the app with the AI scanner on, signs in as test users, points a
     # fake camera at a real card and checks it loads, plays and adds the card.
     name: Scanner in a browser
-    runs-on: ubuntu-latest
+    # Playwright 1.59 has no Chromium build for ubuntu-latest (26.04) yet.
+    runs-on: ubuntu-24.04
     timeout-minutes: 25
     services:
       postgres:

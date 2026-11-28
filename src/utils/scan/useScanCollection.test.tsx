@@ -10,7 +10,7 @@ jest.mock("next-auth/react", () => ({
 }));
 
 let collectionsData: { id: string; name: string | null }[] | undefined = [];
-const addCardMutate = jest.fn();
+const addCardMutate = jest.fn<void, [{ collectionId: string; cardId: string }]>();
 const createMutateAsync = jest.fn();
 const invalidateAll = jest.fn();
 
@@ -63,7 +63,10 @@ describe("useScanCollection with no collections yet", () => {
       result.current.add({ id: "bolt", name: "Lightning Bolt" });
       result.current.add({ id: "shock", name: "Shock" });
     });
-    await act(async () => resolve({ id: "new-1", name: "My collection" }));
+    await act(() => {
+      resolve({ id: "new-1", name: "My collection" });
+      return Promise.resolve();
+    });
 
     await waitFor(() => expect(addCardMutate).toHaveBeenCalledTimes(2));
     expect(createMutateAsync).toHaveBeenCalledTimes(1);
