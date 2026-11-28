@@ -19,6 +19,24 @@
  *    the region stops at about the middle of the card.
  *  - Old frame (before 8th Edition): the title bar sits a little lower and
  *    looser, so its rect is taller and wider.
+ *
+ * Colour cues (colourCues.ts) read two more places:
+ *  - Border: the printed border is about 3 mm on a 63x88 mm card, about 22
+ *    px on all four sides at 488x680. The strips sit from about 5 to 15 px
+ *    in from each edge: past the outermost pixels, where a slightly off warp
+ *    shows the table, and short of the frame that starts at about 18 px.
+ *    They skip the first and last 8% of each side so the rounded corners
+ *    (about 3 mm radius) stay out.
+ *  - Set symbol: right end of the type line, M15 frame. The type line bar
+ *    runs from about 55.5% to 60% of the height; the symbol is about 20 to
+ *    35 px wide and 20 to 24 px tall, right-aligned at about 92% of the
+ *    width. The rect runs from 80% to 95.5% across and 53.5% to 62.5% down,
+ *    a few percent past the symbol on every side for warp error. It also
+ *    fits the 2003 frame (8th Edition to M14). Pre-2003 frames put the
+ *    symbol elsewhere or print none.
+ *  These two are worked out from the frame's printed proportions, not yet
+ *  measured on Scryfall's images like the title and collector rects; the
+ *  set symbol rect is generous to cover the difference.
  */
 
 import type { Rect } from "~/utils/scan/cardGuide";
@@ -38,6 +56,13 @@ export const CARD_REGIONS = {
   titleOldFrame: { left: 0.04, top: 0.03, width: 0.92, height: 0.1 },
   /** The two-line collector info block, bottom left. */
   collector: { left: 0.025, top: 0.885, width: 0.5, height: 0.095 },
+  /** The printed border, four thin strips inside the outer edge, corners left out. */
+  borderTop: { left: 0.08, top: 0.008, width: 0.84, height: 0.014 },
+  borderBottom: { left: 0.08, top: 0.978, width: 0.84, height: 0.014 },
+  borderLeft: { left: 0.01, top: 0.08, width: 0.02, height: 0.84 },
+  borderRight: { left: 0.97, top: 0.08, width: 0.02, height: 0.84 },
+  /** The set symbol at the right end of the type line, M15 and 2003 frames. */
+  setSymbol: { left: 0.8, top: 0.535, width: 0.155, height: 0.09 },
 } as const satisfies Record<string, CardRegion>;
 
 export type CardRegionName = keyof typeof CARD_REGIONS;
