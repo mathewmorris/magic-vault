@@ -98,7 +98,7 @@ SELECT c."id", c."image_status", c."image_uris", c."card_faces",
      WHERE e."cardId" = c."id" AND e."modelId" = $1),
     '{}'
   ) AS done_faces${pendingCardsWhere()}
-ORDER BY c."id"
+ORDER BY c."released_at" DESC NULLS LAST, c."id"
 LIMIT ${assertPositiveInt(limit, "limit")}`.trim();
 }
 

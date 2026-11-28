@@ -247,6 +247,12 @@ can be started by hand with a limit, a dry run or calibrate. **It does
 nothing until the repo variable `AI_SCAN_INDEX_ENABLED` is `true`**
 (Settings > Secrets and variables > Actions > Variables). At 20000 cards a
 day, a first full index of about 120k printings takes about a week of runs.
+Newest printings go first, so a partial index covers recent sets.
+
+To try the scanner on a PR preview, run the workflow by hand with `target`
+set to `preview`. That indexes the Neon preview branch PR previews use,
+from the PREVIEW_DATABASE_URL secret, and works while `AI_SCAN_INDEX_ENABLED`
+is off. Without that secret the run stops rather than touch production.
 
 ## Storage
 
