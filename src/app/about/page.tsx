@@ -16,7 +16,9 @@ export const metadata: Metadata = {
 };
 
 const PROJECT_BOARD_URL = "https://github.com/users/mathewmorris/projects/2?pane=info";
-const ISSUES_URL = "https://github.com/mathewmorris/magic-vault/issues";
+const ISSUES_URL = "https://github.com/mathewmorris/magic-vault/issues/new/choose";
+const DISCUSSIONS_URL = "https://github.com/mathewmorris/magic-vault/discussions";
+const CONTRIBUTING_URL = "https://github.com/mathewmorris/magic-vault/blob/main/CONTRIBUTING.md";
 
 const AUDIENCE = [
   {
@@ -121,6 +123,27 @@ export default function About() {
             rel="noreferrer"
           >
             Open an issue on GitHub
+          </a>
+          .
+        </p>
+        <p className={mutedText}>
+          Want to toss around an idea or just say how it&apos;s going? Come hang out in{" "}
+          <a
+            href={DISCUSSIONS_URL}
+            className="font-semibold text-pink-600 underline dark:text-pink-400"
+            target="_blank"
+            rel="noreferrer"
+          >
+            GitHub Discussions
+          </a>
+          . Want to help build it? Start with the{" "}
+          <a
+            href={CONTRIBUTING_URL}
+            className="font-semibold text-pink-600 underline dark:text-pink-400"
+            target="_blank"
+            rel="noreferrer"
+          >
+            contributing guide
           </a>
           .
         </p>
