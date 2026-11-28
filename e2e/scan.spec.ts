@@ -181,8 +181,9 @@ for (const user of USERS) {
           timeline.push(...(await mainThreadStack(page)));
           throw new Error("The page froze while the scanner loaded");
         }
-        const text = (await loading.textContent({ timeout: 1000 }).catch(() => null))?.trim() ?? null;
-        if (text === null) break;
+        if (!(await loading.isVisible())) break;
+        // A slow read while the models start isn't the end of loading.
+        const text = (await loading.textContent({ timeout: 5000 }).catch(() => null))?.trim() ?? lastText;
         if (text !== lastText) {
           mark(text);
           lastChange = Date.now();

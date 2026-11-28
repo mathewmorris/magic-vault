@@ -307,7 +307,13 @@ export function parseCollectorInfo(text: string): CollectorInfo {
 
     const glued = splitGluedRarity(token);
     const numberText = glued ? glued.rest : token;
-    const number = readNumber(numberText);
+    let number = readNumber(numberText);
+    // Right before the slash, a mark or two stuck to the front is the set
+    // symbol or the frame read as letters: "P187 / 361", "$187 / 361".
+    if (!number && tokens[i + 1]?.text === "/") {
+      const trimmed = /^[^0-9]{1,2}([0-9].*)$/.exec(numberText);
+      if (trimmed) number = readNumber(trimmed[1]!);
+    }
     if (!number) continue;
 
     // "0157 / 280": this is the number and the next one is the total.

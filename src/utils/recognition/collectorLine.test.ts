@@ -39,6 +39,14 @@ describe("parseCollectorInfo", () => {
     ])("%j", (text, expected) => expectInfo(text, expected));
   });
 
+  describe("marks stuck to the front of the number", () => {
+    test.each<[string, Expected]>([
+      // Real reads from the browser check, Lightning Bolt CLB 187.
+      ["P187/361 C\nCLBENIRINANORDSOL\n", { collectorNumber: "187", total: "361", rarity: "C" }],
+      ["$187/361 C\nCLB « EN w [RINA NORDSOL\n", { collectorNumber: "187", total: "361", setCode: "clb" }],
+    ])("%j", (text, expected) => expectInfo(text, expected));
+  });
+
   describe("languages", () => {
     test.each<[string, string]>([
       ["STX • ES", "es"],
