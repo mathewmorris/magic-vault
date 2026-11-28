@@ -67,7 +67,7 @@ class PlanOperationsTest(unittest.TestCase):
         self.assertIsNone(op.fields["purchase_uris"])
         self.assertNotIn("edhrec_rank", op.fields)
         self.assertEqual(set(op.fields),
-                         {"id"} | set(apply_diff.STORED_FIELDS))
+                         {"id", "prices"} | set(apply_diff.STORED_FIELDS))
 
     def test_added_card_missing_required_field_is_skipped(self):
         card = fake_card("Bear")
@@ -298,6 +298,31 @@ class ExecuteOperationsTest(unittest.TestCase):
             'WHERE "id" = %s')
         self.assertEqual(mixed_params, [('{"small": "s"}', "token", "u3")])
         self.assertFalse(any("DELETE" in sql for sql, _ in cursor.calls))
+
+    def test_prices_go_to_card_price_after_the_card_writes(self):
+        ops = [
+            Operation(INSERT, "new", {**apply_diff.card_to_row(
+                "new", fake_card("Bear")), "prices": {"usd": "1.00"}}),
+            Operation(UPDATE, "moved", {"prices": {"usd": "2.00"}}),
+            Operation(UPDATE, "both", {"name": "B", "prices": None}),
+        ]
+        cursor = FakeCursor()
+        apply_diff.execute_operations(FakeConnection(cursor), ops)
+        sqls = [sql for sql, _ in cursor.calls]
+        self.assertTrue(sqls[0].startswith('INSERT INTO "Card"'))
+        self.assertEqual(sqls[1],
+                         'UPDATE "Card" SET "name" = %s WHERE "id" = %s')
+        self.assertTrue(sqls[2].startswith('INSERT INTO "CardPrice"'))
+        self.assertEqual(len(sqls), 3)  # the price-only change has no Card update
+        self.assertEqual(cursor.calls[2][1], [
+            ('{"usd": "1.00"}', "new"), ('{"usd": "2.00"}', "moved"),
+            (None, "both")])
+
+    def test_upserts_leave_matching_rows_alone(self):
+        self.assertIn('IS DISTINCT FROM (EXCLUDED."name"',
+                      apply_diff.insert_sql())
+        self.assertIn('"CardPrice"."prices" IS DISTINCT FROM EXCLUDED."prices"',
+                      apply_diff.price_upsert_sql())
 
     def test_insert_params_carry_gameplay_and_printing_fields(self):
         card = fake_card("Bear", oracle_id="o-1", mana_cost="{1}{G}", cmc=2.0,

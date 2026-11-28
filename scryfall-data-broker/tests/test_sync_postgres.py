@@ -45,7 +45,7 @@ class PostgresSyncTest(unittest.TestCase):
     def apply(self, cards, **overrides):
         values = dict(cards=self.write_bulk(cards),
                       state_dir=os.path.join(self.tmp.name, 'state'),
-                      updated_at='T', dry_run=False, full=False,
+                      updated_at='T', dry_run=False, full=False, prune=False,
                       batch_size=2)
         values.update(overrides)
         with mock.patch.dict(os.environ, {'DATABASE_URL': URL}), \
@@ -57,9 +57,18 @@ class PostgresSyncTest(unittest.TestCase):
     def rows(self):
         self.conn.rollback()
         with self.conn.cursor() as cur:
-            cur.execute('SELECT id, name, layout, image_uris, all_parts, '
-                        'prices FROM "Card" ORDER BY id')
+            cur.execute('SELECT c.id, c.name, c.layout, c.image_uris, '
+                        'c.all_parts, p.prices FROM "Card" c '
+                        'LEFT JOIN "CardPrice" p ON p."cardId" = c.id '
+                        'ORDER BY c.id')
             return {r[0]: r[1:] for r in cur.fetchall()}
+
+    def row_versions(self, table, key):
+        """Each row's xmin, which changes whenever the row is rewritten."""
+        self.conn.rollback()
+        with self.conn.cursor() as cur:
+            cur.execute(f'SELECT "{key}", xmin::text FROM "{table}"')
+            return dict(cur.fetchall())
 
     def test_first_run_then_incremental_run(self):
         out = self.apply(self.cards, updated_at='T1')
@@ -78,8 +87,12 @@ class PostgresSyncTest(unittest.TestCase):
                      '000000000001', name='Brand New Card')
         changed.append(added)
 
+        cards_before = self.row_versions('Card', 'id')
         out = self.apply(changed, updated_at='T2')
-        self.assertIn('1 new, 2 changed', out)
+        self.assertIn('1 new, 1 changed, 1 with only a new price', out)
+        # The price move left its Card row alone.
+        self.assertEqual(self.row_versions('Card', 'id')[changed[1]['id']],
+                         cards_before[changed[1]['id']])
         self.assertIn('1 removed', out)
         rows = self.rows()
         self.assertEqual(rows[changed[0]['id']][2]['small'],
@@ -89,7 +102,34 @@ class PostgresSyncTest(unittest.TestCase):
         self.assertIn(removed['id'], rows)
 
         out = self.apply(changed, updated_at='T3')
-        self.assertIn('0 new, 0 changed', out)
+        self.assertIn('0 new, 0 changed, 0 with only a new price', out)
+
+    def test_lost_state_rewrites_only_what_changed(self):
+        # With no saved hashes every card is sent again, but rows that
+        # already match aren't rewritten.
+        self.apply(self.cards)
+        cards_before = self.row_versions('Card', 'id')
+        prices_before = self.row_versions('CardPrice', 'cardId')
+        moved = copy.deepcopy(self.cards)
+        moved[0]['prices'] = dict(moved[0]['prices'], usd='123.00')
+        out = self.apply(moved, state_dir=os.path.join(self.tmp.name, 'fresh'))
+        self.assertIn(f'{len(self.cards)} new', out)
+        self.assertEqual(self.row_versions('Card', 'id'), cards_before)
+        prices_after = self.row_versions('CardPrice', 'cardId')
+        changed_ids = {k for k in prices_after
+                       if prices_after[k] != prices_before.get(k)}
+        self.assertEqual(changed_ids, {moved[0]['id']})
+        self.assertEqual(self.rows()[moved[0]['id']][4]['usd'], '123.00')
+
+    def test_pruned_cards_take_their_prices(self):
+        self.apply(self.cards)
+        with self.conn.cursor() as cur:
+            cur.execute('DELETE FROM "Card" WHERE id = %s',
+                        (self.cards[0]['id'],))
+            cur.execute('SELECT count(*) FROM "CardPrice" WHERE "cardId" = %s',
+                        (self.cards[0]['id'],))
+            self.assertEqual(cur.fetchone()[0], 0)
+        self.conn.rollback()
 
     def test_upserts_over_existing_rows_when_state_is_lost(self):
         self.apply(self.cards)

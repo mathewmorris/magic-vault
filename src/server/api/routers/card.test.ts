@@ -341,6 +341,10 @@ describe("card procedures", () => {
         ],
         skipDuplicates: true,
       });
+      expect(prismaMock.cardPrice.createMany).toHaveBeenCalledWith({
+        data: [{ cardId: "new-1", prices: Prisma.DbNull }],
+        skipDuplicates: true,
+      });
       expect(prismaMock.card.findMany).toHaveBeenCalledTimes(2);
       expect(result).toStrictEqual({ items: [stored], nextCursor: undefined });
     });

@@ -27,15 +27,20 @@ export const emptyCardFields = {
   purchase_uris: null,
 } satisfies Partial<Card>;
 
-/** What toCardRow writes for those columns when the Scryfall card has none. */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- prices is left out on purpose
+const { prices: _prices, ...emptyCardRowColumns } = emptyCardFields;
+
+/**
+ * What toCardRow writes for those columns when the Scryfall card has none.
+ * It never writes prices: those go to CardPrice.
+ */
 export const emptyCardRowFields = {
-  ...emptyCardFields,
+  ...emptyCardRowColumns,
   colors: Prisma.DbNull,
   color_identity: Prisma.DbNull,
   keywords: Prisma.DbNull,
   legalities: Prisma.DbNull,
   finishes: Prisma.DbNull,
-  prices: Prisma.DbNull,
   purchase_uris: Prisma.DbNull,
 };
 

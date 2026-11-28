@@ -78,6 +78,22 @@ jobs:
   broker:
     name: Scryfall broker tests
     runs-on: ubuntu-latest
+    # For tests/test_sync_postgres.py, which runs the sync against a real
+    # database with the Prisma migrations applied.
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: broker_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v5
         with:
@@ -106,7 +122,24 @@ jobs:
         working-directory: scryfall-data-broker
         run: pip install -r requirements.txt
 
+      - uses: actions/setup-node@v5
+        if: steps.changes.outputs.broker == 'true'
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Apply migrations to the test database
+        if: steps.changes.outputs.broker == 'true'
+        run: |
+          npm ci
+          npx prisma migrate deploy
+        env:
+          SKIP_ENV_VALIDATION: "true"
+          DATABASE_URL: "postgresql://postgres:postgres@localhost:5432/broker_test"
+
       - name: Unit tests
         if: steps.changes.outputs.broker == 'true'
         working-directory: scryfall-data-broker
         run: python -m unittest -v
+        env:
+          BROKER_TEST_DATABASE_URL: "postgresql://postgres:postgres@localhost:5432/broker_test"
