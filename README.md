@@ -72,6 +72,10 @@ DATABASE_URL=postgresql://postgres:postgres@localhost:5432/magicvault_test npm r
 
 CI runs them on every pull request against a `postgres:16` service container.
 
+## Contributing
+
+Want to follow along or pitch in? Start with [CONTRIBUTING.md](./CONTRIBUTING.md). What's planned and in progress lives on the [project board](https://github.com/users/mathewmorris/projects/2), and ideas and questions go in [Discussions](https://github.com/mathewmorris/magic-vault/discussions).
+
 ## Deployment
 
 | Event | Result |

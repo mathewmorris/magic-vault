@@ -1,0 +1,58 @@
+name: Bug report
+description: Something in Magic Vault is broken or acting weird.
+title: "[Bug]: "
+labels: ["bug"]
+projects: ["mathewmorris/2"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report this. The more you can tell us, the faster we can track it down.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: Tell us what went wrong.
+      placeholder: I added a card to my collection and it didn't show up.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect to happen?
+      placeholder: The card should show up in the collection right away.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: How can we make it happen on our end?
+      placeholder: |
+        1. Go to ...
+        2. Click ...
+        3. See ...
+    validations:
+      required: false
+  - type: input
+    id: page
+    attributes:
+      label: Page or URL
+      description: Where in the app were you? Leave out anything private.
+      placeholder: /search
+    validations:
+      required: false
+  - type: input
+    id: device
+    attributes:
+      label: Device and browser
+      placeholder: iPhone 15, Safari / Windows laptop, Chrome
+    validations:
+      required: false
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Screenshots or recordings
+      description: Drag and drop images or videos here if you have them.
+    validations:
+      required: false

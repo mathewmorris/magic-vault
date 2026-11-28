@@ -1,0 +1,39 @@
+name: Idea or feature
+description: Pitch something new for Magic Vault, or a change to something that's already there.
+title: "[Idea]: "
+labels: ["enhancement", "needs discussion"]
+projects: ["mathewmorris/2"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Got an idea? Love it. If it's still half-formed and you just want to talk it through, [Discussions](https://github.com/mathewmorris/magic-vault/discussions) works great too.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What's the problem?
+      description: What are you trying to do, and what's getting in the way?
+      placeholder: I want to see how much my collection is worth by set, but there's no way to group it.
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What's the idea?
+      description: How would you like it to work?
+    validations:
+      required: true
+  - type: textarea
+    id: who
+    attributes:
+      label: Who does it help?
+      description: Collectors, deck builders, people new to Magic, folks on phones, etc.
+    validations:
+      required: false
+  - type: textarea
+    id: anything-else
+    attributes:
+      label: Anything else?
+      description: Links, sketches, other apps that do it well, whatever helps.
+    validations:
+      required: false
